@@ -31,7 +31,7 @@ Define a clear, step-by-step **execution order** for humans and coding agents to
    Document: `docs/Phase_2_Social_Accounts_and_OAuth.md`  
    - Define SocialAccount and SocialAuthToken entities.  
    - Implement provider abstraction for OAuth.  
-   - Implement **one** concrete provider end-to-end (recommended: Facebook).  
+   - Implement one concrete provider end-to-end (recommended: Facebook) and design for more.  
    - Add APIs and UI for connecting/disconnecting social accounts per workspace.
 
 4. **Phase 3 – Posts, Scheduling, and Publishing Pipeline**  
@@ -72,7 +72,56 @@ Define a clear, step-by-step **execution order** for humans and coding agents to
    - Add AI endpoints for caption suggestions and article repurposing.  
    - Integrate AI into Post composer (suggestions, variants).  
    - Add competitor entities, APIs, and UI for competitor tracking and metrics.  
-   - Optionally add AI-assisted best-time recommendations on top of deterministic analytics.
+   - Add AI-assisted best-time recommendations on top of deterministic analytics where appropriate.
+
+9. **Phase 8 – Advanced Scheduling & Content Types**  
+   Document: `docs/Phase_8_Advanced_Scheduling_and_Content_Types.md`  
+   - Add queue-based scheduling (posting queues & slots per account).  
+   - Implement recurring and recycling/evergreen posts.  
+   - Extend PostType to support reels, stories, shorts, carousels, polls, documents, articles.  
+   - Support multiple media attachments per PostVariant.  
+   - Enhance calendar UI with drag-and-drop and queue views.
+
+10. **Phase 9 – Deep Analytics: Hashtags, Members, Experiments**  
+    Document: `docs/Phase_9_Deep_Analytics_Hashtags_Members_Experiments.md`  
+    - Add hashtag entities, usage tracking, and per-hashtag analytics.  
+    - Add member analytics (per-creator performance).  
+    - Implement A/B experiments and result aggregation.  
+    - Extend competitor analytics with comparison views.
+
+11. **Phase 10 – Collaboration: Approvals, Comments, Activity & Notifications**  
+    Document: `docs/Phase_10_Collaboration_Approvals_Comments_Notifications.md`  
+    - Implement post approval workflows (request/approve/reject).  
+    - Add comments on posts and variants.  
+    - Add activity log/audit trail for key actions.  
+    - Add notification system (in-app and email) for approvals, comments, failures, etc.
+
+12. **Phase 11 – Public API & Integrations (Zapier/Make/Webhooks)**  
+    Document: `docs/Phase_11_Public_API_and_Integrations.md`  
+    - Implement API keys and scoped access.  
+    - Expose versioned public API (`/api/public/v1/`) for posts, accounts, analytics, automation.  
+    - Implement webhooks for events (post created/published/failed, automation, media, etc.).  
+    - Provide configuration and UI for API keys and webhook subscriptions.
+
+13. **Phase 12 – Billing, Plans, and Usage Limits**  
+    Document: `docs/Phase_12_Billing_Plans_and_Limits.md`  
+    - Define plans and plan limits.  
+    - Integrate with Stripe (or equivalent) for subscriptions.  
+    - Track usage metrics per workspace and enforce limits.  
+    - Add billing UI for workspace owners.
+
+14. **Phase 13 – Enterprise Features: SSO, Multi-Region, Whitelabel**  
+    Document: `docs/Phase_13_Enterprise_Features_SSO_MultiRegion_Whitelabel.md`  
+    - Add SSO support (OIDC) for enterprise workspaces.  
+    - Introduce region-aware configuration and job execution (multi-region readiness).  
+    - Implement whitelabel and theming per workspace, including custom domains.
+
+15. **Phase 14 – Advanced AI: Images, Multilingual, Brand Voice & Insights**  
+    Document: `docs/Phase_14_Advanced_AI_and_Multilingual.md`  
+    - Add AI image generation integrated with media library.  
+    - Add multilingual caption/variant generation and translation flows.  
+    - Use brand voice profiles for AI generation.  
+    - Add AI-generated analytics insights and optional chat assistant.
 
 ---
 
