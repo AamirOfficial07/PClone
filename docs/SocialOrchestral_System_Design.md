@@ -1,16 +1,27 @@
 # SocialOrchestrator – System Design Document  
-*A “better Publer” social media management platform*
+*A “better Publer” social media management platform – optimized for a solo developer and single-server deployment*
 
-**Document Version:** 0.1 (Draft)  
+**Document Version:** 0.2 (Draft)  
 **Date:** YYYY-MM-DD  
 **Author:** –  
 
-**Proposed Tech Stack**
+---
 
-- **Backend:** ASP.NET Core Web API (.NET 8+)
-- **Frontend:** Angular
-- **Primary Database:** SQL Server
-- **Infrastructure (recommended):** Azure (App Service, SQL, Service Bus, Blob Storage, Redis)
+## 0. Context & Constraints
+
+This design is tailored specifically for:
+
+- **You working solo** (no big team, no DevOps department).
+- **Local development** in VS Code or Visual Studio.
+- **Deployment to a single hosting server** (VPS / Windows host / Linux + reverse proxy).
+- **No hard dependency** on cloud-specific components (Azure Service Bus, Redis, etc.) for the first phase.
+
+Design principles:
+
+- **Keep it simple to build and run on your machine.**
+- **Use a modular monolith** (one backend process, one database).
+- **Use database-backed background jobs** (Hangfire or similar) instead of external queues.
+- **Design for future scaling**, but don’t implement complex infrastructure until needed.
 
 ---
 
@@ -18,17 +29,18 @@
 
 ### 1.1 Purpose
 
-This document describes the system design for **SocialOrchestrator**, a multi-tenant social media management platform intended to be a more powerful and extensible alternative to Publer.
+This document describes the system design for **SocialOrchestrator**, a social media management platform intended to be a more powerful and extensible alternative to Publer, while being realistic for a single developer to implement and run.
 
 It covers:
 
 - Product goals and scope  
 - Functional and non-functional requirements  
-- High-level system architecture  
+- High-level system architecture (single-server friendly)  
 - Logical modules and data model  
 - Integration with social networks  
-- Security, scalability, and deployment considerations  
-- Proposed implementation roadmap  
+- Development setup and project structure  
+- Deployment approach for a typical hosting server  
+- Implementation roadmap  
 
 ### 1.2 Scope
 
@@ -38,18 +50,18 @@ SocialOrchestrator will provide:
 - Drafting, scheduling, and publishing of social content  
 - Media library and asset management  
 - Team collaboration and approval workflows  
-- Analytics and insights (posts, accounts, hashtags, members, competitors)  
+- Analytics and insights (posts, accounts, hashtags; competitor analytics can come later)  
 - Rule-based automation and external integrations  
-- A public REST API
+- A public REST API (after core app is stable)
 
 ### 1.3 Vision and Differentiation
 
 Compared to Publer, SocialOrchestrator aims to:
 
-- Provide a cleaner modular architecture that is easier to extend  
-- Offer a powerful **rule-based automation engine**  
-- Integrate **AI-assisted content and scheduling** from day one  
-- Be multi-tenant and enterprise-ready, with clear boundaries for scaling and possible microservices in the future  
+- Provide a **clean modular architecture** that is easy to work on solo.
+- Offer a built-in **rule-based automation engine**.
+- Integrate **AI-assisted content and scheduling** once core is stable.
+- Remain **simple to deploy** (single server, single SQL Server DB), with the option to scale up later.
 
 ---
 
@@ -59,699 +71,584 @@ Compared to Publer, SocialOrchestrator aims to:
 
 - Marketing teams and agencies  
 - Solo creators and small businesses  
-- Enterprises managing multiple brands and regions  
-- Developers integrating social workflows into their own apps (via API)
+- Enterprises (later, once the platform matures)  
+- Developers integrating social workflows via API (later phase)
 
 ### 2.2 Supported Networks (Initial & Extensible)
 
-Initial networks (prioritized):
+Initial networks (realistic for v1 as a solo dev):
 
 - Facebook
 - Instagram
 - X (Twitter)
 - LinkedIn
 
-Additional networks (planned):
+Future additions:
 
-- Pinterest
-- YouTube
-- TikTok
-- Google Business Profile
-- WordPress
-- Telegram
-- Mastodon
-- Threads
-- Bluesky
+- Pinterest, YouTube, TikTok  
+- Google Business Profile  
+- WordPress, Telegram, Mastodon, Threads, Bluesky  
 
-The design supports adding more providers via a pluggable connector model.
+The design supports adding providers as **plugins** to a common interface.
 
 ---
 
 ## 3. Requirements
 
-### 3.1 Functional Requirements
+### 3.1 Functional Requirements (Prioritized for Solo Dev)
 
 #### 3.1.1 User & Workspace Management
 
-- User registration, login, logout, password reset
-- Workspaces (organizations/brands)  
-- A user can belong to multiple workspaces
-- Invite users to a workspace via email
+- User registration, login, logout, password reset.
+- Workspaces (organizations/brands).
+- A user can belong to multiple workspaces.
+- Invite users to a workspace via email.
 - Role-based access within a workspace:
-  - Owner, Admin, Editor, Viewer, Client (configurable roles)
-- Workspace-level settings:
-  - Time zone  
-  - First day of week  
-  - Branding (logo, colors)  
-  - Default posting times  
+  - Owner, Admin, Editor, Viewer (Client roles can be added later).
+- Workspace settings:
+  - Time zone, first day of week.
+  - Branding (name, logo).
+  - Default time slots for posting.
 
 #### 3.1.2 Social Account Management
 
-- Connect social accounts via OAuth for each provider
-- Store access/refresh tokens securely and refresh automatically when possible
-- Display connected accounts and their status
+- Connect social accounts via OAuth for each provider.
+- Store access/refresh tokens securely (encrypted in DB).
+- Automatic token refresh where supported.
 - Handle:
-  - Permission loss (missing scopes)  
-  - Token expiration  
-  - Re-authorization flows  
-- Support disabling and deleting connected accounts safely (without breaking history)
+  - Revoked tokens.
+  - Missing permissions.
+  - Re-authorization flows.
+- Disable/delete connected accounts (without breaking history).
 
 #### 3.1.3 Post Creation & Management
 
 - Rich post editor:
-  - Text, emojis, hashtags, links  
-  - Attach images, GIFs, videos, documents, carousels  
-  - Network-specific customizations (caption text limits, link preview options, tags/mentions)  
+  - Text, emojis, hashtags, links.
+  - Attach images, GIFs, videos.
+  - Per-network customization (e.g., shorter text for Twitter).
 - Draft management:
-  - Create, edit, duplicate drafts  
-  - Save as templates  
-- Bulk operations:
-  - Bulk post creation via CSV/Excel or API  
-- Content types (similar to Publer):
-  - Status (text-only)  
-  - Link  
-  - Photo  
-  - GIF  
-  - Video  
-  - Reel  
-  - Story  
-  - Short  
-  - Poll  
-  - Document  
-  - Carousel  
-  - Article  
+  - Create, edit, duplicate drafts.
+  - Save as templates.
+- Bulk:
+  - v1: Optional. Start with single post creation; bulk import can be added later.
+- Supported content types for v1:
+  - Status (text-only).
+  - Link.
+  - Photo.
+  - Video.
+- Other types (reels, stories, carousels, polls, etc.) can be phased in.
 
 #### 3.1.4 Scheduling & Publishing
 
-- Single-time scheduling (specific date/time)  
-- Queue-based scheduling:
-  - Per-account time slots (e.g. Mon/Wed/Fri at 9:00)  
-- Recurring schedules:
-  - RRULE-style (every N days/weeks/months, by weekday, etc.)  
-- Recycling/evergreen content:
-  - Reposting with configurable intervals and end conditions  
-- Publishing behavior:
-  - Reliable background workers  
-  - Exponential backoff retries  
-  - Platform constraints enforced (e.g., text length, aspect ratios, video duration)  
-- Time zone aware:
-  - Scheduling according to workspace time zone  
+- Schedule posts at specific date/time (per account).
+- Time zone-aware scheduling (workspace time zone).
+- Queue-based scheduling (phase 2):
+  - Define weekly time slots per account.
+  - Add posts to queues instead of specifying exact time.
+- Evergreen/recycling content (phase 2+):
+  - Simple version first: requeue a post after X days until end date.
+- Publishing reliability:
+  - Background worker executes publish jobs.
+  - Retries with simple exponential backoff.
+  - Clear error logging and user-facing status (failed + reason).
 
 #### 3.1.5 Calendar & Dashboard
 
-- Calendar views:
-  - Monthly, weekly, daily  
+- Calendar view:
+  - Month/week view of scheduled & published posts.
 - Filters:
-  - Workspace, social account, member, post state, content type, tags/labels  
-- Drag-and-drop rescheduling in calendar view  
-- Kanban-style board:
-  - Draft → Pending approval → Scheduled → Published → Failed  
+  - Workspace, social account, state (draft/scheduled/published/failed).
+- Drag-and-drop rescheduling (phase 2).
+- Basic dashboard:
+  - Upcoming posts.
+  - Recent published posts with high-level stats (if available).
 
 #### 3.1.6 Collaboration & Approval
 
-- Approval workflows:
-  - Request approval for a post  
-  - Approve or decline with reason  
-- Comments and discussions on posts  
+- Basic v1:
+  - Assign post creator and optional reviewer.
+  - Approval status on posts:
+    - Draft / PendingApproval / Approved / Rejected.
+- Comments on posts (simple single-threaded comment list).
 - Activity log:
-  - Track who created/edited/approved/scheduled posts and when  
+  - Show key actions (created, edited, scheduled, approved, published, failed).
 
 #### 3.1.7 Media Library
 
-- Upload media:
-  - Images, GIFs, videos, documents  
-- Store in cloud blob storage  
-- Organize:
-  - Folders, tags, favorites  
-- Search by name, tag, type, uploader, date  
-- Basic editing (optional initial feature):
-  - Crop, resize, add watermark  
-- Reuse assets across multiple posts and workspaces (with permissions)
+- Upload images and videos from browser to server.
+- Store files under a dedicated folder on the server (e.g., `/var/www/socialorchestrator/media` or `D:\socialorchestrator\media`).
+- Metadata in DB:
+  - Filename, path, type, size, workspace, uploader, created date.
+- Organization:
+  - Tags and simple folder hierarchy.
+- Search by name, tag, type.
 
-#### 3.1.8 Automation & Integrations
+(NOTE: Cloud storage support is optional/future. The storage layer will be abstracted to allow local file system and, later, S3/Azure Blob etc.)
 
-- Integrations:
-  - RSS/Atom feeds → auto-generate draft posts  
-  - Webhooks (inbound/outbound)  
-  - Connectors (e.g. CMS, Zapier/Make, etc.)  
-- Rule-based automation engine:
-  - Triggers:
-    - New content (e.g. an RSS item)  
-    - Time-based triggers (cron-like)  
-    - Metrics thresholds (e.g. posts with &gt;X clicks)  
-    - Webhook events  
-  - Conditions:
-    - Text contains / doesn’t contain words/hashtags  
-    - Accounts, content types, labels, performance metrics  
-  - Actions:
-    - Create draft  
-    - Schedule post or move to queue  
-    - Add labels/tags  
-    - Send email or webhook  
-    - Notify team members  
+#### 3.1.8 Automation & Integrations (Scoped for Solo Dev)
 
-#### 3.1.9 Analytics & Insights
+Phase 1:
 
-- Per-post metrics:
-  - Impressions, reach, clicks, reactions, reactions by type, comments, shares, saves, CTR  
-- Account and workspace analytics:
-  - Follower growth, engagement rate over time  
-  - Posting frequency and content mix  
-- Hashtag analytics:
-  - Performance per hashtag (reach, engagement, CTR)  
-  - Top-performing posts per hashtag  
-- Best times to post:
-  - Day/hour heatmaps based on historical data  
-- Member analytics:
-  - Performance by creator/member (posts created, average engagement)  
-- Competitor analytics:
-  - Track competitor accounts  
-  - Compare follower counts, engagement rate, posting mix and frequency  
-- Reporting:
-  - Download as CSV/PDF  
-  - Schedule reports via email  
+- Simple automation:
+  - Time-based triggers (e.g., daily job).
+  - RSS feed ingestion → create draft posts.
+- Basic webhooks:
+  - Outbound webhook on certain events (e.g., post published) if configured.
+
+Later:
+
+- Full rule engine (IF/THEN rules).
+- Third-party integrations (Zapier/Make/others).
+
+#### 3.1.9 Analytics & Insights (V1 Scope)
+
+For v1 (realistic scope for a solo dev):
+
+- Per-post metrics where the social platforms allow:
+  - Impressions/reach, likes, comments, shares, clicks.
+- Basic per-account stats:
+  - Followers count over time (daily snapshots).
+  - Posts per day.
+- Simple “best time to post”:
+  - Start with aggregated performance by hour over the last N days.
+
+Later (Phase 3+):
+
+- Hashtag analytics (group posts by hashtags, metrics per hashtag).
+- Member analytics (performance by creator).
+- Competitor analytics.
 
 #### 3.1.10 Public REST API
 
-- Base URL: `/api/v1`  
-- JSON-based requests and responses  
-- Authentication:
-  - API keys (Bearer-API style) scoped to workspace and permissions  
-- Example endpoints:
-  - `GET /api/v1/me`  
-  - `GET /api/v1/workspaces`  
-  - `GET/POST /api/v1/accounts`  
-  - `GET/POST /api/v1/posts`  
-  - `GET /api/v1/posts/{id}`  
-  - `GET /api/v1/analytics/posts`  
-- Async operations:
-  - Bulk post creation, heavy analytics/report generation:
-    - Return `{ "job_id": "..." }`  
-    - Job status endpoint `GET /api/v1/jobs/{job_id}`  
+- Phase 1:
+  - Internal backend API for Angular only.
+- Phase 2:
+  - Public REST API (documented via Swagger) for:
+    - /me, /workspaces, /accounts, /posts.
+  - API keys per workspace.
 
 #### 3.1.11 Billing & Plans
 
-- Plan tiers (configurable):
-  - Free, Pro, Business, Enterprise  
-- Constraints per plan:
-  - Number of workspaces, social accounts, scheduled posts  
-  - Number of automation rules  
-  - API access level  
-  - Analytics depth  
-- Stripe integration:
-  - Subscription billing and invoices  
-  - Trials, upgrades/downgrades, proration  
-- Usage tracking:
-  - Posts created, API requests, automation rule executions  
-
-### 3.2 Non-Functional Requirements
-
-- Multi-tenant SaaS: single codebase, multiple workspaces  
-- Availability target: 99.9%+  
-- Horizontal scalability:
-  - API layer and background workers can scale independently  
-- Performance:
-  - Fast UI response (&lt; 300ms typical API latency for common operations)  
-  - Efficient pagination for large datasets (posts, media, analytics)  
-- Security:
-  - Strong auth and authorization  
-  - Secure storage of tokens and secrets  
-  - Audit trails for critical actions  
-- Observability:
-  - Centralized logs  
-  - Metrics for performance and business KPIs  
-  - Distributed tracing for complex workflows  
-- Extensibility:
-  - Clear module boundaries and internal APIs  
+- For early development:
+  - No billing integration required (you can manually manage access).
+- When needed:
+  - Integrate Stripe for subscriptions.
+  - Define plan limits (accounts, posts, etc.).
 
 ---
 
-## 4. High-Level Architecture
+### 3.2 Non-Functional Requirements (Simplified for Solo Dev)
 
-### 4.1 Architectural Overview
+- Single primary deployment target: **one server** running:
+  - ASP.NET Core Web API.
+  - Angular SPA (served from same process or via static hosting).
+  - SQL Server (either on same machine or network accessible).
+- Maintainable by a single developer.
+- Performance:
+  - Efficient DB queries and pagination for tens/hundreds of thousands of posts.
+- Reliability:
+  - Publishing jobs must not be lost; use DB-backed job queue.
+- Security:
+  - Solid authentication/authorization.
+  - Token and secret encryption.
+- Extensibility:
+  - Clear module boundaries so new features don’t become a mess.
+
+---
+
+## 4. Architecture
+
+### 4.1 High-Level Architecture (Single-Server)
 
 Components:
 
-- **Frontend:** Angular SPA served over HTTPS  
-- **API:** ASP.NET Core Web API as the primary gateway  
-- **Background Services:** .NET worker processes for:
-  - Scheduler
-  - Publisher
-  - Analytics ingestion and aggregation
-  - Automation rule execution
-- **Database:** SQL Server for transactional data  
-- **Cache:** Redis for caching and rate limiting  
-- **Storage:** Blob storage for media files  
-- **Message Bus:** Azure Service Bus or RabbitMQ for asynchronous jobs  
+- **Frontend:** Angular SPA.
+- **Backend:** ASP.NET Core Web API (single executable).
+- **Database:** SQL Server (all core data + Hangfire tables for jobs).
+- **File Storage:** Local file system for media (configurable path).
+- **Background Jobs:** Hangfire or custom hosted services (using SQL as job store).
 
-### 4.2 Logical Architecture Diagram (Conceptual)
+No external message bus, no Redis, no cloud-specific services are required.
+
+### 4.2 Logical Architecture Diagram
 
 ```text
-      +------------------+            +------------------+
-      |  Angular Frontend|  HTTPS     |  Third-party     |
-      |  (SPA)           +----------->+  Integrations    |
-      +--------+---------+            +------------------+
-               |
-               v
-      +------------------------------+
-      |  ASP.NET Core Web API        |
-      |  - Auth, Workspaces          |
-      |  - Posts, Scheduling         |
-      |  - Media, Analytics (read)   |
-      |  - Automation, Billing       |
-      +-------+-----------+----------+
-              |           |
-              |           v
-              |   +------------------+
-              |   | Public API       |
-              |   | (API Keys)       |
-              |   +------------------+
-              |
-      +-------+-------------------------------+
-      |           Domain Services             |
-      |  - Identity & Access                  |
-      |  - Workspace & Team Management        |
-      |  - Social Connectors                  |
-      |  - Post & Scheduling                  |
-      |  - Media Management                   |
-      |  - Analytics & Reporting              |
-      |  - Automation & Rules                 |
-      |  - Billing & Subscription             |
-      +-------+-----------+-------------------+
-              |           |
-              v           v
-       +----------+   +--------+   +-----------------+
-       | SQL       |  | Redis  |   | Message Bus     |
-       | Server    |  | Cache  |   | (Queue / Topic) |
-       +-----------+  +--------+   +-----------------+
-              |
-              v
-       +---------------------------+
-       | Blob Storage (Media)     |
-       +---------------------------+
-
-Background Workers:
-- Scheduler: reads SQL, enqueues jobs
-- Publisher: reads queue, calls social APIs
-- Analytics: periodically fetches metrics
-- Automation: executes rules based on events
++----------------------+
+|   Angular Frontend   |
+|   (SPA)              |
++----------+-----------+
+           |
+           | HTTPS (REST + JSON)
+           v
++-------------------------------+
+| ASP.NET Core Web API          |
+|  - Auth & Users               |
+|  - Workspaces & Teams         |
+|  - Social Accounts            |
+|  - Posts & Scheduling         |
+|  - Media                      |
+|  - Analytics (read)           |
+|  - Automation (simple)        |
+|  - Admin/Settings             |
++---------------+---------------+
+                |
+                +------------------------------+
+                |                              |
+                v                              v
+        +---------------+             +-----------------+
+        | SQL Server    |             | File System     |
+        | - Domain data |             | - Media files   |
+        | - Auth tokens |             +-----------------+
+        | - Hangfire    |
+        +-------+-------+
+                ^
+                |
+        Background Jobs (same process)
+        - Scheduler
+        - Publisher
+        - Analytics polling
+        - RSS/Automation
 ```
 
 ### 4.3 Architectural Style
 
-- **Modular Monolith** for early versions:
-  - Clear folder/assembly structure by domain  
-- **Domain-driven design** concepts:
-  - Entities, value objects, domain services per bounded context  
-- **Service boundaries**:
-  - Identity & Access  
-  - Workspaces & Teams  
-  - Social Connectors  
-  - Posts & Scheduling  
-  - Media  
-  - Analytics  
-  - Automation  
-  - Billing  
-
-The design anticipates potential future split into microservices by keeping domain modules isolated and using messaging for cross-module workflows.
+- **Modular monolith**: one codebase, one process, clear internal modules.
+- Layers:
+  - **Domain**: entities, value objects, domain rules.
+  - **Application**: use cases/services, input/output DTOs.
+  - **Infrastructure**: EF Core, file storage, social network clients.
+  - **Presentation**: Web API controllers.
 
 ---
 
 ## 5. Logical Modules and Responsibilities
 
+Modules are logical; they can be separate C# class libraries in the solution.
+
 ### 5.1 Identity & Access
 
-**Responsibilities:**
+Responsibilities:
 
-- User management (registration, login, password reset)
-- JWT issuance and validation
-- Role- and permission-based authorization
-- API key management (for public API)
+- User accounts, login, logout, password reset.
+- JWT generation/validation.
+- Role-based authorization within workspaces.
+- Optional API keys for public API.
 
-**Core Entities:**
+Technology:
 
-- `User`
-- `Role`
-- `Permission`
-- `ApiKey`
+- ASP.NET Identity (SQL Server store).
+- JWT auth middleware.
 
 ---
 
 ### 5.2 Workspace & Team Management
 
-**Responsibilities:**
+Responsibilities:
 
-- Create and manage workspaces
-- Invite members and assign roles
-- Maintain workspace-specific settings
-- Associate workspaces with plans/subscriptions
+- Create/edit workspaces.
+- Invite users by email and assign roles.
+- Workspace-level settings (time zone, branding, limits).
 
-**Core Entities:**
+Entities:
 
-- `Workspace`
-- `WorkspaceMember`
-- `WorkspaceRole`
-- `WorkspaceSettings`
+- `Workspace`, `WorkspaceMember`, `WorkspaceSettings`.
 
 ---
 
-### 5.3 Social Connector Service
+### 5.3 Social Connectors
 
-**Responsibilities:**
+Responsibilities:
 
-- Integrate with social network APIs (OAuth flows, publishing, analytics)
-- Abstract provider differences under a unified interface
-- Manage tokens and scopes
-- Handle provider-specific errors and rate limits
+- OAuth flows for each social network.
+- Store and refresh tokens securely.
+- Publishing and deletion of posts.
+- Fetch per-post and per-account metrics.
 
-**Core Entities:**
+Design:
 
-- `SocialAccount`
-- `SocialAuthToken`
-- `SocialProviderConfig`
-
-**Key Interface (example):**
-
-```csharp
-public interface ISocialPublisher
-{
-    Task&lt;PublishResult&gt; PublishAsync(PostVariant variant, SocialAccount account, MediaAsset[] media);
-    Task&lt;DeleteResult&gt; DeleteAsync(PostVariant variant, SocialAccount account);
-    Task&lt;AnalyticsResult&gt; FetchAnalyticsAsync(PostVariant variant, SocialAccount account, DateTime from, DateTime to);
-}
-```
-
-Provider-specific implementations (e.g., `FacebookPublisher`, `InstagramPublisher`, etc.) implement this interface.
+- `ISocialPublisher` interface with implementations:
+  - `FacebookPublisher`, `InstagramPublisher`, `TwitterPublisher`, `LinkedInPublisher`, etc.
+- A factory or registry that maps network type → publisher implementation.
 
 ---
 
-### 5.4 Post & Scheduling Service
+### 5.4 Posts & Scheduling
 
-**Responsibilities:**
+Responsibilities:
 
-- Manage posts, drafts, and per-account variants
-- Manage schedules (single, recurring, queue-based, recycling)
-- Provide data for calendar and board views
-- Interface with Scheduler and Publisher workers
+- CRUD for posts and per-account variants.
+- Scheduling logic for single-run posts (v1).
+- Integration with Hangfire/jobs:
+  - Enqueue a publish job for each PostVariant at scheduled time.
 
-**Core Entities:**
+Entities:
 
-- `Post` – conceptual post content
-- `PostVariant` – per social account/network instance
-- `Schedule` – when/how a post will be published
-- `QueueSlot` – queue-based time slots per account
-- `PublishJob` – record of each publishing attempt
+- `Post` (logical content).
+- `PostVariant` (content for a specific social account).
+- `Schedule` (for each variant).
+- `PublishExecution` (optional: tracks job runs).
 
----
+Workflow:
 
-### 5.5 Media Management Service
-
-**Responsibilities:**
-
-- Upload and store media in blob storage
-- Maintain metadata and associations to posts
-- Generate thumbnails and previews
-- Manage folders, tags, and search
-
-**Core Entities:**
-
-- `MediaAsset`
-- `MediaFolder`
-- `MediaUsage` (join between `PostVariant` and `MediaAsset`)
+1. User creates a Post with one or more PostVariants.
+2. User schedules each variant:
+   - Set `ScheduledAt` (in workspace time zone).
+3. When saving:
+   - Create a job in Hangfire scheduled for `ScheduledAt` in UTC.
+4. Background worker:
+   - Executes job → calls `ISocialPublisher.PublishAsync` → updates state.
 
 ---
 
-### 5.6 Analytics & Reporting Service
+### 5.5 Media Management
 
-**Responsibilities:**
+Responsibilities:
 
-- Fetch metrics from social APIs  
-- Store raw metrics and maintain aggregated views  
-- Provide analytics APIs for posts, accounts, workspaces, hashtags, members, competitors  
-- Compute “best times to post” and other derived insights  
-- Generate downloadable and scheduled reports  
+- Upload and store media on local file system.
+- Track metadata in DB.
+- Serve files via ASP.NET Core (protected URLs if necessary).
 
-**Core Entities:**
+Entities:
 
-- `Metric` (raw)
-- `PostAnalyticsDaily`
-- `AccountAnalyticsDaily`
-- `WorkspaceAnalyticsDaily`
-- `Hashtag` / `HashtagAnalyticsDaily`
-- `Competitor` / `CompetitorMetricsDaily`
-- `Report`
+- `MediaAsset` (ID, path, workspace, type, etc.).
+- `MediaUsage` (link between PostVariant and MediaAsset).
 
----
+Design:
 
-### 5.7 Automation & Rules Engine
-
-**Responsibilities:**
-
-- Allow users to define automation rules with triggers, conditions, and actions  
-- Execute rules in background workers  
-- Provide audit/history of rule runs  
-
-**Core Entities:**
-
-- `AutomationRule`
-- `AutomationTrigger`
-- `AutomationCondition`
-- `AutomationAction`
-- `AutomationRun`
+- `IMediaStorage` interface:
+  - `SaveAsync(Stream stream, string fileName) → path`
+  - `DeleteAsync(path)`
+  - Implementation: `LocalFileSystemMediaStorage` (root path in config).
 
 ---
 
-### 5.8 Notification Service
+### 5.6 Analytics & Reporting (Initial)
 
-**Responsibilities:**
+Responsibilities:
 
-- Send email and in-app notifications:
-  - Post approvals, failures, comments, limit warnings, etc.  
-- Provide basic communication channels (email, webhooks, possibly Slack/Teams in future)
+- Poll provider APIs periodically to update metrics.
+- Store daily snapshots for:
+  - Posts.
+  - Accounts.
+- Provide simple analytics endpoints.
+
+Approach:
+
+- Background job scheduled every X minutes/hours:
+  - Fetch metrics for recent posts.
+  - Update `PostAnalyticsDaily` and `AccountAnalyticsDaily` tables.
 
 ---
 
-### 5.9 Billing & Subscription Service
+### 5.7 Automation (Initial)
 
-**Responsibilities:**
+Responsibilities:
 
-- Integrate with Stripe:
-  - Plans, subscriptions, invoices, customer profiles  
-- Track usage against plan limits  
-- Enforce feature and usage limits  
-- Provide subscription management UI/flows  
+- RSS feed ingestion:
+  - Periodically read configured feeds.
+  - Create draft posts for new items.
+- Simple time-based tasks:
+  - Cleanup old failed jobs/logs.
+  - Send daily summary emails (later).
 
-**Core Entities:**
+Approach:
 
-- `Plan`
-- `Subscription`
-- `Invoice`
-- `UsageLog`
+- Hangfire recurring jobs (`Cron.Hourly`, `Cron.Daily`, etc.).
+- Simple configuration in DB and admin UI.
 
 ---
 
 ## 6. Data Model (High-Level)
 
-### 6.1 Key Tables (Simplified)
+Key tables (simplified):
 
-**Identity & Workspace**
+- `Users`  
+- `Workspaces`  
+- `WorkspaceMembers`  
 
-- `Users`
-  - `UserId`, `Email`, `PasswordHash`, `Status`, `CreatedAt`, `LastLoginAt`, …
+- `SocialAccounts` (workspace, network type, external IDs, token FK)  
+- `SocialAuthTokens` (encrypted tokens, expiry)  
 
-- `Workspaces`
-  - `WorkspaceId`, `Name`, `TimeZone`, `PlanId`, `OwnerUserId`, `CreatedAt`, …
+- `Posts` (workspace, state, creator, created/updated timestamps)  
+- `PostVariants` (per social account, text, media, scheduled/published, state, externalPostId)  
+- `Schedules` (variant, scheduled time, timezone) or store schedule fields on `PostVariants` directly for v1.  
 
-- `WorkspaceMembers`
-  - `WorkspaceId`, `UserId`, `Role`, `InvitedByUserId`, `JoinedAt`, …
+- `MediaAssets` (workspace, path, type)  
+- `MediaUsages` (PostVariant↔MediaAsset)  
 
-- `ApiKeys`
-  - `ApiKeyId`, `WorkspaceId`, `TokenHash`, `Scopes`, `CreatedAt`, `LastUsedAt`, `Status`
+- `PostAnalyticsDaily` (variant, date, metrics)  
+- `AccountAnalyticsDaily` (social account, date, metrics)  
 
-**Social Connections**
+- Hangfire tables (`Hangfire.*`) for jobs.
 
-- `SocialAccounts`
-  - `SocialAccountId`, `WorkspaceId`, `NetworkType`, `ExternalId`, `Name`, `Username`, `Status`, `CreatedAt`
+For early implementation, you can:
 
-- `SocialAuthTokens`
-  - `SocialAccountId`, `AccessToken`, `RefreshToken`, `ExpiresAt`, `Scopes`, `EncryptedSecret`, `UpdatedAt`
-
-**Content & Scheduling**
-
-- `Posts`
-  - `PostId`, `WorkspaceId`, `Title`, `CreatedByUserId`, `State`, `CreatedAt`, `UpdatedAt`, `Source`, …
-
-- `PostVariants`
-  - `PostVariantId`, `PostId`, `SocialAccountId`, `Text`, `Link`, `PostType`, `ScheduledAt`, `PublishedAt`, `State`, `ExternalPostId`, …
-
-- `Schedules`
-  - `ScheduleId`, `PostId`, `Type` (Single, Recurring, Queue), `RecurrenceRule`, `TimeZone`, `NextRunAt`, `EndAt`, …
-
-- `QueueSlots`
-  - `QueueSlotId`, `WorkspaceId`, `SocialAccountId`, `DayOfWeek`, `TimeOfDay`, `Position`, …
-
-- `PublishJobs`
-  - `JobId`, `PostVariantId`, `ScheduledAt`, `StartedAt`, `FinishedAt`, `Status`, `ErrorCode`, `ErrorMessage`, `RetryCount`
-
-**Media**
-
-- `MediaAssets`
-  - `MediaId`, `WorkspaceId`, `Type`, `Url`, `ThumbnailUrl`, `Size`, `Duration`, `CreatedByUserId`, `CreatedAt`
-
-- `MediaUsages`
-  - `PostVariantId`, `MediaId`
-
-**Analytics**
-
-- `MetricsRaw`
-  - `MetricId`, `SocialAccountId`, `PostVariantId`, `MetricType`, `Value`, `RecordedAt`
-
-- `PostAnalyticsDaily`
-  - `PostVariantId`, `Date`, `Impressions`, `Clicks`, `Likes`, `Comments`, `Shares`, `Saves`, …
-
-- `AccountAnalyticsDaily`, `WorkspaceAnalyticsDaily`
-
-- `Hashtags`
-  - `HashtagId`, `WorkspaceId`, `Tag`
-
-- `HashtagAnalyticsDaily`
-  - `HashtagId`, `Date`, metrics…
-
-- `Competitors`, `CompetitorMetricsDaily`
-
-**Automation & Billing**
-
-- `AutomationRules`, `AutomationTriggers`, `AutomationActions`, `AutomationRuns`
-
-- `Plans`, `Subscriptions`, `Invoices`, `UsageLogs`
+- Put schedule columns (`ScheduledAt`, `TimeZone`, `IsRecurring` flag, `RecurrenceRule` nullable) directly on `PostVariants`.
+- Add separate `Schedules` table later if recurrence becomes complex.
 
 ---
 
-## 7. Social Network Integration
+## 7. Development Setup & Project Structure
 
-### 7.1 Provider Abstraction
+### 7.1 Backend Project Structure (C# / .NET)
 
-Use a strategy pattern with `ISocialPublisher`:
+Recommended solution layout:
 
-- Each provider implementation:
-  - Knows how to format payloads  
-  - Calls provider-specific endpoints  
-  - Handles provider-specific rate limits and errors  
-- The main system works with generic `PostVariant` and `MediaAsset` objects and delegates specifics to providers.
+```text
+src/
+  Server/
+    SocialOrchestrator.Api/           # ASP.NET Core Web API (controllers, startup)
+    SocialOrchestrator.Application/   # Use cases, DTOs, application services
+    SocialOrchestrator.Domain/        # Entities, value objects, domain logic
+    SocialOrchestrator.Infrastructure/# EF Core, social clients, media storage, auth, Hangfire
+  Client/
+    social-orchestrator-web/          # Angular app
+tests/
+  SocialOrchestrator.UnitTests/
+  SocialOrchestrator.IntegrationTests/
+```
 
-### 7.2 Scheduling & Publishing Flow
+Key points:
 
-1. User creates a post with one or more `PostVariants`.  
-2. A `Schedule` is attached (single time, recurring, or queue-based).  
-3. Scheduler worker runs periodically:
-   - Finds due `Schedules` (`NextRunAt &lt;= now + horizon`)  
-   - Creates `PublishJobs` and enqueues messages to message bus  
-4. Publisher worker:
-   - Consumes messages from `PublishJobs` queue  
-   - Loads `PostVariant`, `SocialAccount`, `MediaAssets`  
-   - Calls `ISocialPublisher.PublishAsync` for the appropriate provider  
-   - Updates `PostVariant.State` (e.g., `scheduled` → `published` or `failed`)  
-   - Updates `PublishJobs` with status and error details  
+- `Domain` has no dependencies on other projects.
+- `Application` depends only on `Domain`.
+- `Infrastructure` depends on both `Domain` and `Application`.
+- `Api` depends on `Application` and `Infrastructure`.
 
-5. On failures:
-   - Retry with exponential backoff (bounded)  
-   - If still failing, mark as `failed`, notify user, and potentially set `SocialAccount` to `reauth_required`  
+### 7.2 Frontend Project Structure (Angular)
 
----
+Basic Angular workspace:
 
-## 8. Technology Stack
-
-### 8.1 Backend (ASP.NET Core Web API)
-
-- ASP.NET Core Web API (.NET 8+)  
-- Clean Architecture / Onion Architecture:
-  - `Domain` – Entities, value objects, domain services  
-  - `Application` – Use cases, service interfaces  
-  - `Infrastructure` – EF Core, provider clients, messaging  
-  - `WebApi` – Controllers, middleware, DI  
-
-- EF Core with SQL Server  
-- Redis for caching and rate limiting  
-- Hangfire/Quartz.NET or custom scheduler with message bus for jobs  
-- Swagger/OpenAPI for docs  
-- Serilog + OpenTelemetry for logging and tracing  
-
-### 8.2 Frontend (Angular)
-
-- Angular (17+), stand-alone components  
-- Routing modules per domain:
-  - Auth, Workspaces, Social Accounts, Posts/Calendar, Media, Analytics, Settings/Billing  
-- State Management:
-  - NgRx, NGXS, or Akita  
-- UI Components:
-  - Angular Material, PrimeNG, or both  
-- Charts:
-  - ngx-charts, Chart.js, or ECharts  
-
-### 8.3 Database (SQL Server)
-
-- Azure SQL Database or managed SQL Server  
-- Strong indexing strategy:
-  - `WorkspaceId`, `SocialAccountId`, `PostId`, `State`, `ScheduledAt`, `CreatedAt`  
-- Separate schema or tables for analytics to keep OLTP queries fast  
-
-### 8.4 Infrastructure & DevOps
-
-- Cloud (recommended): Azure
-  - App Service (API + Angular)
-  - Azure SQL Database
-  - Azure Service Bus
-  - Azure Blob Storage
-  - Azure Redis Cache
-  - Azure Application Insights
-
-- CI/CD:
-  - GitHub Actions or Azure DevOps  
-  - Build & test on every commit  
-  - Deploy to staging automatically, manual approval for production  
+```text
+client/social-orchestrator-web/
+  src/
+    app/
+      core/            # services, interceptors, auth
+      shared/          # shared components, models
+      features/
+        auth/
+        workspaces/
+        social-accounts/
+        posts/
+        calendar/
+        media/
+        analytics/
+        settings/
+      app-routing.module.ts
+      app.component.*
+```
 
 ---
 
-## 9. Security & Compliance
+### 7.3 Local Development Environment
 
-- All traffic over HTTPS, HSTS enabled  
-- JWT authentication, short-lived tokens with refresh tokens  
-- API keys for external integrations with scope-based permissions  
-- Secrets in Key Vault (no secrets in code)  
-- Token encryption at rest  
-- Role-based authorization on all endpoints  
-- Audit logs for important changes (e.g., roles, billing, publishing actions)  
-- GDPR readiness:
-  - Data export for users/workspaces  
-  - Data deletion workflows  
+Requirements:
+
+- .NET 8 SDK.
+- Node.js + npm.
+- Angular CLI.
+- SQL Server (LocalDB, SQL Express, or Docker SQL Server).
+- IDE: VS Code or Visual Studio (your choice).
+
+Typical dev flow:
+
+1. `cd src/Server/SocialOrchestrator.Api`
+2. `dotnet ef database update` (to create DB).
+3. `dotnet run` (API on https://localhost:5001).
+4. `cd src/Client/social-orchestrator-web`
+5. `npm install`
+6. `ng serve` (Angular on http://localhost:4200).
 
 ---
 
-## 10. Implementation Roadmap
+## 8. Deployment Architecture (Single Hosting Server)
 
-### Phase 1 – MVP
+### 8.1 Assumptions
 
-- Identity & Workspaces  
-- Connect a limited set of networks (e.g., Facebook, Instagram, LinkedIn, X)  
-- Draft/schedule/publish basic post types (status, photo, link)  
-- Basic calendar view  
-- Basic media library  
-- Minimal post-level analytics  
-- Simple public API for posts and accounts  
+- You have one hosting server (Linux or Windows).
+- You can host:
+  - A .NET application.
+  - A SQL Server instance (or use a remote SQL Server).
+  - Angular built files as static content.
 
-### Phase 2 – v1
+### 8.2 Deployment Options
 
-- Additional networks and content types  
-- Roles/permissions and approval workflows  
-- Automation engine v1 (time-based and simple triggers)  
-- More complete analytics (best times, hashtags, member performance)  
-- Billing and subscription flows with Stripe  
-- Improved public API (analytics, media, automation)  
+**Option A: ASP.NET Core serves Angular**
 
-### Phase 3 – Advanced
+- Build Angular (`ng build --prod`).
+- Copy `dist/` into `SocialOrchestrator.Api/wwwroot`.
+- Configure API to serve SPA (UseSpa / static files).
+- Deploy a single .NET app (Kestrel + IIS/NGINX reverse proxy).
 
-- Full analytics suite including competitor analytics  
-- Advanced automation (complex triggers, conditional logic, external integrations)  
-- AI-assisted content (caption/hashtag suggestions, repurposing, scheduling recommendations)  
-- Enterprise features: SSO, advanced audit logs, custom roles, SLA support  
-- Multi-region deployments with higher SLAs
+**Option B: Separate Frontend Hosting**
+
+- Host Angular build on your web server (e.g., NGINX / IIS / static hosting).
+- Configure it to call the API at `/api` on the same domain (CORS friendly).
+
+### 8.3 Background Jobs in Production
+
+- Use Hangfire with SQL Server:
+  - It runs in the same process as the API.
+  - Same deployment, simpler to manage.
+- Protect the Hangfire dashboard (if you enable it) with admin auth.
+
+---
+
+## 9. Security (Solo-Friendly but Solid)
+
+- Use HTTPS everywhere (configure SSL on your hosting server).
+- Use ASP.NET Identity for users; store passwords hashed (default).
+- Use JWT for frontend auth.
+- Encrypt social tokens in DB (e.g., using Data Protection APIs or a custom encryption key).
+- Role-based authorization attributes on controllers/actions.
+- Validate all external inputs (webhooks, RSS, etc.).
+
+For now, you do not need:
+
+- OpenTelemetry, distributed tracing, or complex SIEM integrations.
+- External secrets manager; you can start with user secrets + environment variables.
+
+---
+
+## 10. Implementation Roadmap (Solo Dev)
+
+### Phase 0 – Setup & Skeleton
+
+- Create solution and projects (Domain, Application, Infrastructure, Api).
+- Set up EF Core + SQL Server.
+- Add ASP.NET Identity (basic user auth).
+- Scaffold Angular app with basic layout.
+
+### Phase 1 – Core Posting
+
+- Workspaces, social accounts (connect one network first, e.g., Facebook).
+- Post creation (text, photo, link) and manual scheduling.
+- Hangfire-based job for publishing to that one network.
+- Calendar view showing scheduled and published posts.
+- Simple logs for publish failures.
+
+### Phase 2 – Multi-Network & Media
+
+- Add more providers (Instagram, Twitter/X, LinkedIn).
+- Expand post types (video).
+- Media library (local file storage, tagging, search).
+- Per-network customization in post editor.
+
+### Phase 3 – Analytics & Basic Automation
+
+- Poll metrics for posts and accounts.
+- Simple analytics views.
+- RSS ingestion → auto-draft.
+- Basic outbound webhooks.
+
+### Phase 4 – Polish & Public API
+
+- Improve UI/UX.
+- Add approval workflow.
+- Add public REST API with API keys.
+- Optional: Stripe integration for billing.
+
+---
+
+This version of the document is expanded with more concrete implementation details and simplified infrastructure so you can realistically build and run this solo on your local machine and a single hosting server.
