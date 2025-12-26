@@ -465,7 +465,108 @@ In Angular:
 
 ---
 
-## 12. Manual Verification Checklist (End of Phase 9)
+## 12. Testing & Edge Cases (Phase 9)
+
+Read this together with `Cross_Cutting_Guidelines.md`.
+
+### 12.1 Hashtags – Edge Cases
+
+1. **Hashtag extraction rules**:
+   - Only treat tokens starting with `#` and followed by letters/numbers/underscore as hashtags.
+   - Normalize:
+     - Strip leading `#`.
+     - Lowercase.
+   - Ignore hashtags longer than a reasonable maximum (e.g., 100 chars) to avoid abuse.
+
+2. **Text changes**:
+   - When a PostVariant is edited:
+     - Recompute hashtags for that variant.
+     - Synchronize `HashtagUsages`:
+       - Remove usages for hashtags no longer present.
+       - Add usages for newly introduced hashtags.
+   - Tests:
+     - Add a post with `#Launch #News`, edit to `#News`, verify usages update correctly.
+
+3. **Deleted posts/variants**:
+   - When a Post or PostVariant is deleted:
+     - Decide:
+       - Keep analytics and hashtag records (recommended) to preserve historical stats.
+       - Or mark them as orphaned but do not recalculate.
+   - Document and test chosen behavior.
+
+4. **Multiple workspaces using same tag**:
+   - Ensure `Hashtag` is scoped by `WorkspaceId`:
+     - `#launch` in Workspace A is a different record from `#launch` in Workspace B.
+
+### 12.2 Member Analytics – Edge Cases
+
+1. **User belonging to multiple workspaces**:
+   - Member analytics must always be scoped by workspace.
+   - A user’s stats in one workspace must not leak into another workspace.
+
+2. **User deletion or deactivation**:
+   - Historical analytics should remain intact.
+   - In UI, deactivated users can be shown with a label (e.g., “(inactive)”) if needed.
+
+3. **Backfill scenarios**:
+   - If MemberAnalyticsDaily is introduced after many posts exist:
+     - Provide a one-time backfill job:
+       - Iterate through historical posts and variants to populate initial MemberAnalyticsDaily.
+   - Tests:
+     - Backfill does not double-count when run twice.
+
+### 12.3 Experiments – Edge Cases
+
+1. **Unequal variant traffic**:
+   - Experiments should not assume equal traffic distribution.
+   - When computing `ConversionRate`:
+     - Do not treat low-impression variants as conclusive.
+     - Consider including a min-impressions threshold and warning in UI (e.g., “insufficient data”).
+
+2. **Overlapping experiments**:
+   - A single PostVariant may belong to more than one Experiment:
+     - Allowed, but document that experiments may interact.
+   - When computing results:
+     - Each experiment uses the full PostVariant analytics; interpret carefully in UI.
+
+3. **Date ranges**:
+   - For `GetExperimentResultsAsync`:
+     - Experiments may start before `fromUtc` or end after `toUtc`.
+     - Only include analytics within [fromUtc, toUtc].
+   - Edge case tests:
+     - Experiments partially overlapping the requested date range.
+
+4. **Activation/deactivation**:
+   - When deactivating an experiment:
+     - Stop creating new `ExperimentResultDaily` entries, but do not delete existing ones.
+   - When reactivating:
+     - Resume aggregation from the last date, avoiding reprocessing earlier days.
+
+5. **Missing analytics**:
+   - If `PostAnalyticsDaily` entries are missing for some days:
+     - Treat missing days as zeros; do not fabricate data.
+     - UI should reflect that data coverage is partial.
+
+### 12.4 Competitor Analytics – Edge Cases
+
+1. **Private or restricted competitor accounts**:
+   - If provider APIs cannot fetch competitor metrics:
+     - Mark competitor as “data unavailable” and skip metrics aggregation.
+     - Expose this state in API/UI.
+
+2. **Rapid follower fluctuations**:
+   - If follower counts fluctuate heavily:
+     - Ensure daily snapshots are used; do not try to interpolate missing values.
+   - Tests:
+     - Verify that a day with no snapshot is not assumed to have the same value as neighboring days unless explicitly chosen.
+
+3. **Workspace changes**:
+   - If a competitor is removed:
+     - Keep historical metrics but stop scheduling new fetch jobs for that competitor.
+
+---
+
+## 13. Manual Verification Checklist (End of Phase 9)
 
 1. **DB**:
    - Tables for hashtags, member analytics, experiments exist.
@@ -474,22 +575,26 @@ In Angular:
 2. **Hashtags**:
    - Hashtags are extracted from new posts and recorded.
    - Hashtag analytics endpoints return reasonable data.
+   - Editing or deleting posts updates hashtag usage correctly.
 
 3. **Members**:
-   - Member analytics summaries reflect who creates/publishes posts.
-   - Charts show plausible trends.
+   - Member analytics summaries reflect who creates/publishes posts per workspace.
+   - Charts show plausible trends over time.
+   - Backfill, if used, does not double-count.
 
 4. **Experiments**:
    - You can create experiments linking variants.
    - Results show per-variant metrics and conversion rates.
-   - Deactivating experiments stops new result aggregation.
+   - Deactivating experiments stops new result aggregation without deleting history.
+   - Edge cases like low-impression variants are handled gracefully.
 
 5. **Competitors**:
    - Comparison endpoint works and UI reflects differences between competitors.
+   - Unavailable competitor data is indicated clearly.
 
 ---
 
-## 13. Instructions for Automated Coding Agents
+## 14. Instructions for Automated Coding Agents
 
 - Always treat analytics tables as **append-only and aggregated**. Do not rewrite history except via migrations.
 - For metrics not available from providers yet, you can:
@@ -497,5 +602,6 @@ In Angular:
   - Add `TODO` comments where needed.
 - Ensure all analytics endpoints are read-only; no side effects.
 - Preserve existing analytics logic from Phase 5; extend it without breaking behavior.
+- Implement tests for the edge cases outlined in §12.
 
 This completes the specification for **Phase 9 – Deep Analytics: Hashtags, Members, Experiments**.

@@ -405,29 +405,110 @@ In Angular:
 
 ---
 
-## 9. Manual Verification Checklist (End of Phase 8)
+## 9. Testing & Edge Cases (Phase 8)
 
-1. **DB**:
-   - Tables for PostingQueues, QueueSlots, PostVariantMedia, RecurringSchedules, RecyclingConfigs exist and are populated.
+This section is **specific** to Phase 8 and should be read in addition to `Cross_Cutting_Guidelines.md`.
 
-2. **Queue Scheduling**:
-   - You can define queues and slots per social account.
-   - Creating a post “to queue” assigns it a correct next slot.
-   - Posts appear at expected times in calendar.
+### 9.1 Queue-Based Scheduling – Edge Cases
 
-3. **Recurring/Recycle**:
-   - You can configure a recurring/recycling post.
-   - Over time, new variants are created and scheduled as expected.
-   - `RepeatsSoFar` increments, and `MaxRepeats` is honored.
+1. **Multiple queues per account**:
+   - Ensure only one `IsDefault` queue per `(WorkspaceId, SocialAccountId)` is true.
+   - If user deletes the default queue:
+     - Either automatically promote another queue to default, or
+     - Require the user to select a new default (return a clear error).
 
-4. **Content Types**:
-   - UI allows selecting new PostType values.
-   - Backend accepts these types and stores appropriate data.
-   - Basic provider support is present or marked with TODOs if not known.
+2. **Empty queues**:
+   - When a post is “added to queue” but there are **no slots** defined:
+     - Return a 400 error with a specific code (e.g., `"QUEUE_HAS_NO_SLOTS"`).
+     - Do not create a PostVariant without a valid schedule.
 
-5. **Calendar UI**:
-   - Dragging a scheduled post to a new date/time updates its schedule.
-   - Queued posts are distinguishable from fixed-time posts.
+3. **Time conflicts**:
+   - When computing the “next available slot”, define a deterministic rule:
+     - For example, if a slot is already occupied at that exact time:
+       - Option A: place the new post at the next slot.
+       - Option B: allow multiple posts per slot and rely on time ordering in publishing.
+     - Document the chosen behavior in code comments and keep it consistent.
+
+4. **Time zone changes**:
+   - If the workspace time zone changes:
+     - Newly scheduled items should use the new time zone.
+     - Existing scheduled posts keep their existing `ScheduledAtUtc` (no retroactive change).
+   - Tests:
+     - Change workspace time zone and verify that:
+       - Future “add to queue” computations use the new zone.
+       - Existing scheduled posts remain at the original UTC.
+
+5. **Dragging queued posts in calendar**:
+   - If you allow drag-and-drop of a queued post:
+     - Decide whether it stays in queue (but with overridden time) or becomes a fixed-time post.
+     - Implement a clear rule and reflect it in the UI (e.g., “This post has been removed from the queue and scheduled at a fixed time”).
+
+### 9.2 Recurring & Recycling – Edge Cases
+
+1. **Recurrence rule parsing**:
+   - For simplified recurrence JSON:
+     - Validate frequency and allowed values.
+     - On invalid format → 400 error with `"INVALID_RECURRENCE_RULE"`.
+   - Add unit tests:
+     - Daily, weekly (specific days), monthly rules.
+     - Past start date with next occurrence in the future.
+
+2. **Duplicate scheduling**:
+   - Recurring job logic must ensure:
+     - For a given template variant and occurrence time, only one scheduled PostVariant is created.
+     - Use a guard check (e.g., query within a small time window) before creating a new variant.
+
+3. **Recycling MaxRepeats**:
+   - When `MaxRepeats` is set:
+     - Ensure the system stops creating new variants after hitting the limit.
+   - Edge case:
+     - If someone reduces `MaxRepeats` below `RepeatsSoFar`, just leave it as is but do not create further repeats.
+
+4. **Publishing failures in recurring/recycling**:
+   - If a recycled or recurring instance fails to publish:
+     - Do not increment `RepeatsSoFar` (since it did not successfully publish).
+   - Ensure tests cover:
+     - Successful publish increments.
+     - Failed publish does not.
+
+### 9.3 Content Types and Media – Edge Cases
+
+1. **Carousel constraints**:
+   - Enforce:
+     - At least 2 media items.
+     - At most a provider-specific maximum (e.g., 10) – if unknown, choose a conservative default (e.g., 4) and mark with `TODO`.
+   - Test creation of carousels with:
+     - 1 item (should fail).
+     - Exactly min and max allowed.
+
+2. **Polls**:
+   - Enforce:
+     - At least 2 options, max N (e.g., 4).
+     - No empty option texts.
+   - If the network does not support polls:
+     - Backend must reject poll PostVariants for that network with a clear error code (e.g., `"POST_TYPE_UNSUPPORTED_FOR_NETWORK"`).
+
+3. **Type–media mismatches**:
+   - For `Reel`, `Story`, `Short`, require video media types.
+   - If media is not of required type:
+     - Return a 400 error with `"INVALID_MEDIA_TYPE_FOR_POST_TYPE"`.
+
+4. **Provider coverage**:
+   - Some networks may not support all PostTypes:
+     - For now, fail fast when trying to schedule such posts for unsupported networks.
+     - Tests should verify:
+       - Attempting to create unsupported combinations returns clear errors.
+       - Supported combos work.
+
+### 9.4 Calendar UI – Testing Scenarios
+
+- Verify:
+  - Dragging a fixed-time post updates `ScheduledAtUtc` and the server’s view.
+  - Dragging across days/time zones is interpreted correctly in UTC.
+  - Filtering by type and queue/non-queue behaves consistently.
+
+- Regression tests:
+  - Basic Phase 3 scheduling features still work when advanced features are enabled.
 
 ---
 
@@ -437,5 +518,6 @@ In Angular:
 - Keep all new scheduling logic deterministic and auditable (logs where appropriate).
 - Where provider-specific limits (e.g., max images in a carousel) are unknown, add `TODO` and enforce conservative limits.
 - If implementing partial support for advanced PostTypes on some networks only, document that in comments and return clear errors when unsupported.
+- Always add tests (unit and/or integration) for the edge cases described in §9.
 
 This completes the specification for **Phase 8 – Advanced Scheduling & Content Types**.
