@@ -379,19 +379,26 @@ Service: `CompetitorApiService`:
 
 ---
 
-## 8. Advanced Analytics – AI-Assisted Best Times (Optional)
+## 8. Advanced Analytics – AI-Assisted Best Times
 
-If desired in Phase 7, you can add:
+This feature is part of the final product (not optional), but it must still be **configurable** via the AI settings (can be disabled at runtime if AI is not available).
 
-- A refined “best times” endpoint that:
-  - Uses the same `WorkspaceOverviewAnalyticsDto` from Phase 5.
-  - Calls `IAiContentService` with a summary of historical performance and asks for recommended posting windows (e.g., 3–5 best slots).
+- Add a refined “best times” endpoint that:
+  - Uses the same `WorkspaceOverviewAnalyticsDto` from Phase 5 as deterministic input.
+  - Calls `IAiContentService` with a summary of historical performance and asks for recommended posting windows (e.g., 3–5 best slots) and a short rationale.
+
 - Endpoint:
   - `GET /api/workspaces/{workspaceId}/analytics/best-times/ai`
   - Response:
-    - List of suggested time slots with natural language explanation.
+    - List of suggested time slots (day-of-week, hour-of-day) with natural language explanation.
+    - Must also include the underlying deterministic metrics used, so the UI can show both AI suggestions and raw data side by side.
 
-> This is optional; ensure the basic deterministic heatmap from Phase 5 continues to work even if AI is disabled.
+Behavior:
+
+- If AI is disabled (`Provider = "None"` or config flag turned off), this endpoint:
+  - Returns a clear error (`"AI_ADVANCED_DISABLED"`) and does not call any external AI API.
+- If AI is enabled:
+  - It **must not** modify any data; it only reads analytics and returns recommendations.
 
 ---
 

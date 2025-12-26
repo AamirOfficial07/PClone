@@ -7,7 +7,7 @@
 **Goal of Phase 14:**  
 Build on Phase 7 AI features with:
 
-- AI image generation (thumbnails/visuals).  
+- AI image generation (thumbnails/visuals).  \n- Multilingual content generation and translation.  \n- Brand voice profiles per workspace.  \n- AI-generated analytics insights and summaries.  \n- In-app AI assistant chat for strategy and content ideas (feature can be disabled via config but is part of the product design).\n\nThese features are part of the product roadmap and explicitly specified here to avoid “future” ambiguity.age generation (thumbnails/visuals).  
 - Multilingual content generation and translation.  
 - Brand voice profiles per workspace.  
 - AI-generated analytics insights and summaries.  

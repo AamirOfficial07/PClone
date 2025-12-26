@@ -46,13 +46,15 @@ It covers:
 
 SocialOrchestrator will provide:
 
-- Social account management across major networks  
-- Drafting, scheduling, and publishing of social content  
-- Media library and asset management  
+- Social account management across all targeted networks  
+- Drafting, scheduling, and publishing of social content (including advanced formats like reels, stories, carousels, etc.)  
+- Media library and asset management with local storage (cloud-ready)  
 - Team collaboration and approval workflows  
-- Analytics and insights (posts, accounts, hashtags; competitor analytics can come later)  
+- Analytics and insights (posts, accounts, hashtags, members, experiments, competitors)  
 - Rule-based automation and external integrations  
-- A public REST API (after core app is stable)
+- AI-assisted content and analytics  
+- A public REST API and webhooks for integrations  
+- Billing, plans, and enterprise features (SSO, whitelabel, multi-region ready)
 
 ### 1.3 Vision and Differentiation
 
@@ -76,20 +78,23 @@ Compared to Publer, SocialOrchestrator aims to:
 
 ### 2.2 Supported Networks (Initial & Extensible)
 
-Initial networks (realistic for v1 as a solo dev):
+Target networks to support (covered across Phases 2, 8 and beyond):
 
 - Facebook
 - Instagram
 - X (Twitter)
 - LinkedIn
+- Pinterest
+- YouTube
+- TikTok
+- Google Business Profile
+- WordPress
+- Telegram
+- Mastodon
+- Threads
+- Bluesky
 
-Future additions:
-
-- Pinterest, YouTube, TikTok  
-- Google Business Profile  
-- WordPress, Telegram, Mastodon, Threads, Bluesky  
-
-The design supports adding providers as **plugins** to a common interface.
+The design supports adding providers as **plugins** to a common interface (one provider per network type, all conforming to the same abstractions). Initial implementation can prioritize a subset (e.g., Facebook/Instagram/X/LinkedIn) as long as the code structure allows adding the rest without refactoring core logic.
 
 ---
 
@@ -125,54 +130,69 @@ The design supports adding providers as **plugins** to a common interface.
 
 - Rich post editor:
   - Text, emojis, hashtags, links.
-  - Attach images, GIFs, videos.
+  - Attach images, GIFs, videos, documents.
   - Per-network customization (e.g., shorter text for Twitter).
 - Draft management:
   - Create, edit, duplicate drafts.
   - Save as templates.
 - Bulk:
-  - v1: Optional. Start with single post creation; bulk import can be added later.
-- Supported content types for v1:
+  - Bulk post creation via API and, later, via CSV/Excel import.
+- Supported content types (implemented across Phases 3 and 8):
   - Status (text-only).
   - Link.
   - Photo.
   - Video.
-- Other types (reels, stories, carousels, polls, etc.) can be phased in.
+  - Reel.
+  - Story.
+  - Short.
+  - Poll.
+  - Document.
+  - Carousel.
+  - Article.
 
 #### 3.1.4 Scheduling & Publishing
 
 - Schedule posts at specific date/time (per account).
 - Time zone-aware scheduling (workspace time zone).
-- Queue-based scheduling (phase 2):
+- Queue-based scheduling:
   - Define weekly time slots per account.
-  - Add posts to queues instead of specifying exact time.
-- Evergreen/recycling content (phase 2+):
-  - Simple version first: requeue a post after X days until end date.
+  - Add posts to queues instead of specifying exact time; system picks next available slot.
+- Recurring posts:
+  - Support daily/weekly/monthly recurrence with start/end dates.
+- Evergreen/recycling content:
+  - Requeue a post after a configurable interval, with optional max repeats.
 - Publishing reliability:
   - Background worker executes publish jobs.
-  - Retries with simple exponential backoff.
+  - Retries with exponential backoff.
   - Clear error logging and user-facing status (failed + reason).
 
 #### 3.1.5 Calendar & Dashboard
 
 - Calendar view:
-  - Month/week view of scheduled & published posts.
+  - Month/week/day view of scheduled & published posts.
 - Filters:
-  - Workspace, social account, state (draft/scheduled/published/failed).
-- Drag-and-drop rescheduling (phase 2).
-- Basic dashboard:
-  - Upcoming posts.
-  - Recent published posts with high-level stats (if available).
+  - Workspace, social account, state (draft/scheduled/published/failed), post type, tags.
+- Drag-and-drop rescheduling:
+  - Drag posts to new dates/times to change schedules.
+- Queue view:
+  - Visualize queue slots and posts assigned to queues per account.
+- Dashboard:
+  - Upcoming posts and overdue posts.
+  - Recent published posts with high-level stats.
 
 #### 3.1.6 Collaboration & Approval
 
-- Basic v1:
-  - Assign post creator and optional reviewer.
-  - Approval status on posts:
-    - Draft / PendingApproval / Approved / Rejected.
-- Comments on posts (simple single-threaded comment list).
-- Activity log:
-  - Show key actions (created, edited, scheduled, approved, published, failed).
+- Approvals:
+  - Assign post creator and one or more approvers.
+  - Approval workflow on posts:
+    - Draft → PendingApproval → Approved/Rejected.
+- Comments on posts and variants:
+  - Threaded comment list with replies.
+  - Optional @mentions of team members.
+- Activity log / audit:
+  - Show key actions (created, edited, scheduled, approved, published, failed, comments).
+- Notifications:
+  - In-app and email notifications for approvals, rejections, comments, failures, etc.
 
 #### 3.1.7 Media Library
 
@@ -186,55 +206,66 @@ The design supports adding providers as **plugins** to a common interface.
 
 (NOTE: Cloud storage support is optional/future. The storage layer will be abstracted to allow local file system and, later, S3/Azure Blob etc.)
 
-#### 3.1.8 Automation & Integrations (Scoped for Solo Dev)
+#### 3.1.8 Automation & Integrations
 
-Phase 1:
+- Full rule engine (IF/THEN) with:
+  - Triggers: time-based, RSS new items, analytics thresholds, webhooks.
+  - Conditions: text/hashtags, accounts, post types, performance metrics, labels.
+  - Actions: create drafts, schedule posts, move to queues, send webhooks/emails, add labels, etc.
+- RSS feed ingestion:
+  - Periodically fetch RSS/Atom feeds and create draft posts via rules.
+- Webhooks:
+  - Outbound webhooks for key events (post created/published/failed, automation runs, media uploads, etc.).
+- Third-party integrations:
+  - API and webhook design compatible with Zapier/Make and similar tools.
 
-- Simple automation:
-  - Time-based triggers (e.g., daily job).
-  - RSS feed ingestion → create draft posts.
-- Basic webhooks:
-  - Outbound webhook on certain events (e.g., post published) if configured.
-
-Later:
-
-- Full rule engine (IF/THEN rules).
-- Third-party integrations (Zapier/Make/others).
-
-#### 3.1.9 Analytics & Insights (V1 Scope)
-
-For v1 (realistic scope for a solo dev):
+#### 3.1.9 Analytics & Insights
 
 - Per-post metrics where the social platforms allow:
   - Impressions/reach, likes, comments, shares, clicks.
-- Basic per-account stats:
+- Per-account stats:
   - Followers count over time (daily snapshots).
   - Posts per day.
-- Simple “best time to post”:
-  - Start with aggregated performance by hour over the last N days.
-
-Later (Phase 3+):
-
-- Hashtag analytics (group posts by hashtags, metrics per hashtag).
-- Member analytics (performance by creator).
-- Competitor analytics.
+  - Engagement rate.
+- Workspace-level analytics:
+  - Totals and trends over time.
+  - Content-type mix (status vs link vs video, etc.).
+- “Best times to post”:
+  - Deterministic heatmap (Phase 5).
+  - AI-assisted recommendations (Phase 7/14).
+- Deep analytics:
+  - Hashtag analytics (group posts by hashtags, metrics per hashtag).
+  - Member analytics (performance by creator).
+  - Experiment/A/B test analytics.
+  - Competitor analytics and comparisons.
 
 #### 3.1.10 Public REST API
 
-- Phase 1:
-  - Internal backend API for Angular only.
-- Phase 2:
-  - Public REST API (documented via Swagger) for:
-    - /me, /workspaces, /accounts, /posts.
-  - API keys per workspace.
+- Internal REST API for the SPA and admin functionality.
+- Versioned public REST API (e.g., `/api/public/v1`) with:
+  - API keys and scopes per workspace.
+  - Endpoints for workspaces, accounts, posts, media, analytics, automation, and webhooks.
+- Swagger/OpenAPI documentation for public and internal APIs.
 
 #### 3.1.11 Billing & Plans
 
-- For early development:
-  - No billing integration required (you can manually manage access).
-- When needed:
-  - Integrate Stripe for subscriptions.
-  - Define plan limits (accounts, posts, etc.).
+- Plans:
+  - Free, Pro, Business, Enterprise (configurable).
+- Stripe-backed subscriptions:
+  - Per-workspace subscriptions, trials, upgrades/downgrades.
+- Plan limits:
+  - Limits on social accounts, scheduled posts per period, automation rules, API usage, etc.
+- Usage tracking and enforcement:
+  - Usage metrics and limit checks in core flows (creating accounts, scheduling posts, etc.).
+
+#### 3.1.12 Enterprise Features
+
+- SSO:
+  - OIDC-based SSO providers per workspace or organization.
+- Whitelabel:
+  - Custom domains, branding (logo, colors) per workspace.
+- Multi-region readiness:
+  - Region-aware config and job execution; primary region concept for background jobs.
 
 ---
 

@@ -7,6 +7,11 @@ Define a clear, step-by-step **execution order** for humans and coding agents to
 
 - Always start at **Phase 0** and proceed in **numeric order**.  
 - Do **not** implement features from a later phase before finishing all mandatory steps in earlier phases.  
+- Always apply the rules in `docs/Cross_Cutting_Guidelines.md` alongside the current phase document (security, logging, testing, error handling, etc.).  
+- If anything seems unclear in a phase document, add `TODO` comments in the code and/or ask the human owner for clarification; do **not invent behavior**.ow to Use This Document:**
+
+- Always start at **Phase 0** and proceed in **numeric order**.  
+- Do **not** implement features from a later phase before finishing all mandatory steps in earlier phases.  
 - If anything seems unclear in a phase document, add `TODO` comments in the code and/or ask the human owner for clarification; do **not invent behavior**.
 
 ---
