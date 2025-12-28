@@ -22,29 +22,56 @@
       <span class="app-header__title">Social Orchestrator</span>
     </div>
 
-    <nav class="app-header__nav">
-      <a
-        routerLink="/"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{ exact: true }"
-      >
-        Home
-      </a>
+    <div class="app-header__right">
+      <nav class="app-header__nav">
+        <a
+          routerLink="/"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          Home
+        </a>
 
-      <a
-        routerLink="/workflows"
-        routerLinkActive="active"
-      >
-        Workflows
-      </a>
+        <a
+          routerLink="/workflows"
+          routerLinkActive="active"
+        >
+          Workflows
+        </a>
 
-      <a
-        routerLink="/settings"
-        routerLinkActive="active"
-      >
-        Settings
-      </a>
-    </nav>
+        <a
+          routerLink="/settings"
+          routerLinkActive="active"
+        >
+          Settings
+        </a>
+      </nav>
+
+      <ng-container *ngIf="apiState$ | async as api">
+        <span
+          class="app-header__api"
+          [class.app-header__api--mock]="api.mode === 'mock'"
+          [class.app-header__api--online]="api.mode === 'live' && api.status === 'online'"
+          [class.app-header__api--offline]="api.mode === 'live' && api.status === 'offline'"
+        >
+          <ng-container *ngIf="api.mode === 'mock'">
+            API: Mock mode
+          </ng-container>
+          <ng-container *ngIf="api.mode === 'live'">
+            API:
+            <ng-container *ngIf="api.status === 'online'">
+              Live · Online
+            </ng-container>
+            <ng-container *ngIf="api.status === 'offline'">
+              Live · Offline
+            </ng-container>
+            <ng-container *ngIf="api.status === 'unknown'">
+              Live · Checking…
+            </ng-container>
+          </ng-container>
+        </span>
+      </ng-container>
+    </div>
   </header>
 
   <div class="app-shell__body">

@@ -37,6 +37,12 @@
   font-weight: 600;
 }
 
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .app-header__nav {
   display: flex;
   gap: 1rem;
@@ -53,6 +59,30 @@
 .app-header__nav a:hover {
   color: #f9fafb;
   background-color: rgba(55, 65, 81, 0.8);
+}
+
+.app-header__api {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(156, 163, 175, 0.8);
+  color: rgba(229, 231, 235, 0.9);
+  white-space: nowrap;
+}
+
+.app-header__api--mock {
+  border-color: #facc15;
+  color: #facc15;
+}
+
+.app-header__api--online {
+  border-color: #22c55e;
+  color: #bbf7d0;
+}
+
+.app-header__api--offline {
+  border-color: #ef4444;
+  color: #fecaca;
 }
 
 .app-shell__body {
