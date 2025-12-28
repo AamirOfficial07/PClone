@@ -31,6 +31,13 @@ namespace SocialOrchestrator.Infrastructure.Social.Providers.Facebook
 
         public string GetAuthorizationUrl(Guid workspaceId, Guid userId, string state)
         {
+            if (string.IsNullOrWhiteSpace(_options.ClientId) ||
+                string.IsNullOrWhiteSpace(_options.RedirectUri) ||
+                string.IsNullOrWhiteSpace(_options.AuthorizationEndpoint))
+            {
+                throw new InvalidOperationException("Facebook OAuth options are not fully configured on the server.");
+            }
+
             var queryParams = new Dictionary<string, string?>
             {
                 ["client_id"] = _options.ClientId,
@@ -48,6 +55,16 @@ namespace SocialOrchestrator.Infrastructure.Social.Providers.Facebook
             if (string.IsNullOrWhiteSpace(code))
             {
                 return OAuthCallbackResult.Failure(SocialNetworkType.Facebook, "Missing authorization code.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_options.ClientId) ||
+                string.IsNullOrWhiteSpace(_options.ClientSecret) ||
+                string.IsNullOrWhiteSpace(_options.RedirectUri) ||
+                string.IsNullOrWhiteSpace(_options.TokenEndpoint))
+            {
+                return OAuthCallbackResult.Failure(
+                    SocialNetworkType.Facebook,
+                    "Facebook OAuth is not configured correctly on the server.");
             }
 
             var client = _httpClientFactory.CreateClient();
@@ -77,9 +94,10 @@ namespace SocialOrchestrator.Infrastructure.Social.Providers.Facebook
 
             if (!tokenResponse.IsSuccessStatusCode)
             {
+                var statusCode = (int)tokenResponse.StatusCode;
                 return OAuthCallbackResult.Failure(
                     SocialNetworkType.Facebook,
-                    "Failed to exchange authorization code for access token.");
+                    $"Failed to exchange authorization code for access token (HTTP {statusCode}).");
             }
 
             var tokenJson = await tokenResponse.Content.ReadAsStringAsync();
@@ -127,9 +145,10 @@ namespace SocialOrchestrator.Infrastructure.Social.Providers.Facebook
 
             if (!meResponse.IsSuccessStatusCode)
             {
+                var statusCode = (int)meResponse.StatusCode;
                 return OAuthCallbackResult.Failure(
                     SocialNetworkType.Facebook,
-                    "Failed to fetch account information from Facebook.");
+                    $"Failed to fetch account information from Facebook (HTTP {statusCode}).");
             }
 
             var meJson = await meResponse.Content.ReadAsStringAsync();

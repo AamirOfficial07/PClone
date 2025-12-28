@@ -1,6 +1,9 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using SocialOrchestrator.Application.Social.Providers;
 using SocialOrchestrator.Application.SocialAccounts.Services;
 using SocialOrchestrator.Application.Workspaces.Services;
@@ -19,15 +22,27 @@ namespace SocialOrchestrator.Api.Controllers
         private readonly IEnumerable<ISocialAuthProvider> _authProviders;
         private readonly ISocialAccountService _socialAccountService;
         private readonly IWorkspaceService _workspaceService;
+        private readonly byte[] _stateSigningKey;
 
         public OAuthController(
             IEnumerable<ISocialAuthProvider> authProviders,
             ISocialAccountService socialAccountService,
-            IWorkspaceService workspaceService)
+            IWorkspaceService workspaceService,
+            IConfiguration configuration)
         {
             _authProviders = authProviders;
             _socialAccountService = socialAccountService;
             _workspaceService = workspaceService;
+
+            // Reuse the JWT signing key to sign OAuth state. This avoids introducing additional configuration
+            // while ensuring that state cannot be tampered with by clients.
+            var key = configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new InvalidOperationException("Jwt:Key configuration is required to protect OAuth state.");
+            }
+
+            _stateSigningKey = Encoding.UTF8.GetBytes(key);
         }
 
         /// <summary>
@@ -37,6 +52,11 @@ namespace SocialOrchestrator.Api.Controllers
         [Authorize]
         public async Task<IActionResult> GetFacebookAuthorizationUrl([FromQuery] Guid workspaceId)
         {
+            if (workspaceId == Guid.Empty)
+            {
+                return BadRequest(new { error = "workspaceId is required." });
+            }
+
             var userId = GetCurrentUserId();
             if (userId == null)
             {
@@ -58,11 +78,19 @@ namespace SocialOrchestrator.Api.Controllers
                 return StatusCode(500, new { error = "Facebook provider is not configured." });
             }
 
-            // Encode workspace and user into state for later validation
-            var nonce = Guid.NewGuid();
-            var state = $"{workspaceId}:{userId}:{nonce}";
+            // Encode workspace and user into a signed state token for later validation.
+            // The token includes a timestamp and HMAC signature to prevent tampering and replay.
+            var state = CreateSignedState(workspaceId, userId.Value);
 
-            var authorizationUrl = provider.GetAuthorizationUrl(workspaceId, userId.Value, state);
+            string authorizationUrl;
+            try
+            {
+                authorizationUrl = provider.GetAuthorizationUrl(workspaceId, userId.Value, state);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
 
             return Ok(new { authorizationUrl });
         }
@@ -80,9 +108,10 @@ namespace SocialOrchestrator.Api.Controllers
                 return Content("Invalid OAuth callback parameters.", "text/html");
             }
 
-            if (!TryParseState(state, out var workspaceId, out var userId))
+            if (!TryValidateAndParseState(state, out var workspaceId, out var userId, out var stateError))
             {
-                return Content("Invalid or malformed OAuth state. Please retry connecting your account.", "text/html");
+                var message = stateError ?? "Invalid or malformed OAuth state. Please retry connecting your account.";
+                return Content(message, "text/html");
             }
 
             var provider = GetProvider(SocialNetworkType.Facebook);
@@ -157,24 +186,84 @@ namespace SocialOrchestrator.Api.Controllers
             return null;
         }
 
-        private static bool TryParseState(string state, out Guid workspaceId, out Guid userId)
+        private string CreateSignedState(Guid workspaceId, Guid userId)
+        {
+            var issuedAtTicks = DateTime.UtcNow.Ticks;
+            var payload = $"{workspaceId}|{userId}|{issuedAtTicks}";
+            var payloadBytes = Encoding.UTF8.GetBytes(payload);
+
+            using var hmac = new HMACSHA256(_stateSigningKey);
+            var signatureBytes = hmac.ComputeHash(payloadBytes);
+
+            var payloadBase64 = Convert.ToBase64String(payloadBytes);
+            var signatureBase64 = Convert.ToBase64String(signatureBytes);
+
+            return $"{payloadBase64}.{signatureBase64}";
+        }
+
+        private bool TryValidateAndParseState(string state, out Guid workspaceId, out Guid userId, out string? error)
         {
             workspaceId = Guid.Empty;
             userId = Guid.Empty;
+            error = null;
 
-            var parts = state.Split(':', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
+            var parts = state.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2)
             {
                 return false;
             }
 
-            if (!Guid.TryParse(parts[0], out workspaceId))
+            byte[] payloadBytes;
+            byte[] providedSignatureBytes;
+
+            try
+            {
+                payloadBytes = Convert.FromBase64String(parts[0]);
+                providedSignatureBytes = Convert.FromBase64String(parts[1]);
+            }
+            catch
             {
                 return false;
             }
 
-            if (!Guid.TryParse(parts[1], out userId))
+            using var hmac = new HMACSHA256(_stateSigningKey);
+            var expectedSignatureBytes = hmac.ComputeHash(payloadBytes);
+
+            // Constant-time comparison to avoid timing attacks.
+            if (!CryptographicOperations.FixedTimeEquals(providedSignatureBytes, expectedSignatureBytes))
             {
+                return false;
+            }
+
+            var payload = Encoding.UTF8.GetString(payloadBytes);
+            var payloadParts = payload.Split('|', StringSplitOptions.RemoveEmptyEntries);
+            if (payloadParts.Length != 3)
+            {
+                return false;
+            }
+
+            if (!Guid.TryParse(payloadParts[0], out workspaceId))
+            {
+                return false;
+            }
+
+            if (!Guid.TryParse(payloadParts[1], out userId))
+            {
+                return false;
+            }
+
+            if (!long.TryParse(payloadParts[2], out var ticks))
+            {
+                return false;
+            }
+
+            var issuedAt = new DateTime(ticks, DateTimeKind.Utc);
+            var now = DateTime.UtcNow;
+
+            // Reject states older than 10 minutes to limit replay window.
+            if (now - issuedAt > TimeSpan.FromMinutes(10))
+            {
+                error = "OAuth authorization link has expired. Please retry connecting your account.";
                 return false;
             }
 
