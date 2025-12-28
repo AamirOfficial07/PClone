@@ -1,4 +1,5 @@
 const express = require('express');
+const { pool, initSchema } = require('./db');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -21,55 +22,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// In-memory data stores
-
-let workflows = [
-  {
-    id: 'welcome-sequence',
-    name: 'New follower welcome sequence',
-    description: 'Sends a friendly welcome DM and highlights our top resources.',
-    status: 'active',
-    createdAt: '2025-01-01T10:00:00.000Z',
-    lastRunAt: '2025-01-04T15:30:00.000Z'
-  },
-  {
-    id: 'weekly-digest',
-    name: 'Weekly content digest',
-    description: 'Publishes a curated digest across LinkedIn and Twitter every Friday.',
-    status: 'paused',
-    createdAt: '2025-01-02T09:15:00.000Z',
-    lastRunAt: '2025-01-03T17:45:00.000Z'
-  },
-  {
-    id: 'launch-campaign',
-    name: 'Product launch campaign',
-    description: 'Coordinates a multi-week campaign for the next product launch.',
-    status: 'draft',
-    createdAt: '2025-01-05T12:00:00.000Z'
-  }
-];
-
-let connections = [
-  {
-    id: 'twitter-main',
-    platform: 'twitter',
-    label: 'Twitter / X',
-    handle: '@acme',
-    status: 'connected',
-    createdAt: '2025-01-01T10:00:00.000Z',
-    lastSyncAt: '2025-01-04T15:30:00.000Z'
-  },
-  {
-    id: 'linkedin-company',
-    platform: 'linkedin',
-    label: 'LinkedIn Company Page',
-    handle: 'Acme Inc.',
-    status: 'connected',
-    createdAt: '2025-01-02T09:15:00.000Z',
-    lastSyncAt: '2025-01-04T11:00:00.000Z'
-  }
-];
-
 // Helpers
 
 function slugify(value, fallback) {
@@ -85,19 +37,55 @@ function slugify(value, fallback) {
   return base || fallback;
 }
 
+// Map DB rows to API shapes
+
+function mapWorkflowRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+    lastRunAt: row.last_run_at ? row.last_run_at.toISOString() : undefined
+  };
+}
+
+function mapConnectionRow(row) {
+  return {
+    id: row.id,
+    platform: row.platform,
+    label: row.label,
+    handle: row.handle,
+    status: row.status,
+    createdAt: row.created_at.toISOString(),
+    lastSyncAt: row.last_sync_at ? row.last_sync_at.toISOString() : undefined
+  };
+}
+
 // Health
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, version: '1.0.0' });
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('select 1');
+    res.json({ ok: true, version: '1.0.0' });
+  } catch {
+    res.status(500).json({ ok: false });
+  }
 });
 
 // Workflows
 
-app.get('/workflows', (req, res) => {
-  res.json(workflows);
+app.get('/workflows', async (req, res) => {
+  try {
+    const result = await pool.query('select * from workflows order by created_at asc');
+    res.json(result.rows.map(mapWorkflowRow));
+  } catch (err) {
+    console.error('Error fetching workflows', err);
+    res.sendStatus(500);
+  }
 });
 
-app.post('/workflows', (req, res) => {
+app.post('/workflows', async (req, res) => {
   const body = req.body || {};
 
   const now = new Date().toISOString();
@@ -107,72 +95,109 @@ app.post('/workflows', (req, res) => {
   let candidateId = body.id || baseId;
   let suffix = 1;
 
-  while (workflows.some((w) => w.id === candidateId)) {
-    candidateId = `${baseId}-${suffix++}`;
+  try {
+    // ensure id uniqueness
+    while (true) {
+      const existing = await pool.query('select id from workflows where id = $1', [
+        candidateId
+      ]);
+      if (existing.rowCount === 0) {
+        break;
+      }
+      candidateId = `${baseId}-${suffix++}`;
+    }
+
+    const result = await pool.query(
+      `
+      insert into workflows (id, name, description, status, created_at, last_run_at)
+      values ($1, $2, $3, $4, $5, $6)
+      returning *
+    `,
+      [
+        candidateId,
+        name,
+        (body.description || '').toString(),
+        body.status || 'draft',
+        body.createdAt || now,
+        body.lastRunAt || null
+      ]
+    );
+
+    res.status(201).json(mapWorkflowRow(result.rows[0]));
+  } catch (err) {
+    console.error('Error creating workflow', err);
+    res.sendStatus(500);
   }
-
-  const workflow = {
-    id: candidateId,
-    name,
-    description: (body.description || '').toString(),
-    status: body.status || 'draft',
-    createdAt: body.createdAt || now,
-    lastRunAt: body.lastRunAt
-  };
-
-  workflows.push(workflow);
-
-  res.status(201).json(workflow);
 });
 
-app.put('/workflows/:id', (req, res) => {
+app.put('/workflows/:id', async (req, res) => {
   const id = req.params.id;
-  const index = workflows.findIndex((w) => w.id === id);
-
-  if (index === -1) {
-    return res.sendStatus(404);
-  }
-
-  const existing = workflows[index];
   const body = req.body || {};
 
-  const updated = {
-    ...existing,
-    name: typeof body.name === 'string' ? body.name : existing.name,
-    description:
-      typeof body.description === 'string'
-        ? body.description
-        : existing.description,
-    status: typeof body.status === 'string' ? body.status : existing.status,
-    createdAt: body.createdAt || existing.createdAt,
-    lastRunAt: body.lastRunAt !== undefined ? body.lastRunAt : existing.lastRunAt
-  };
+  try {
+    const existing = await pool.query('select * from workflows where id = $1', [id]);
+    if (existing.rowCount === 0) {
+      return res.sendStatus(404);
+    }
 
-  workflows[index] = updated;
+    const current = existing.rows[0];
 
-  res.json(updated);
+    const result = await pool.query(
+      `
+      update workflows
+      set name = $1,
+          description = $2,
+          status = $3,
+          created_at = $4,
+          last_run_at = $5
+      where id = $6
+      returning *
+    `,
+      [
+        typeof body.name === 'string' ? body.name : current.name,
+        typeof body.description === 'string' ? body.description : current.description,
+        typeof body.status === 'string' ? body.status : current.status,
+        body.createdAt || current.created_at,
+        body.lastRunAt !== undefined ? body.lastRunAt : current.last_run_at,
+        id
+      ]
+    );
+
+    res.json(mapWorkflowRow(result.rows[0]));
+  } catch (err) {
+    console.error('Error updating workflow', err);
+    res.sendStatus(500);
+  }
 });
 
-app.delete('/workflows/:id', (req, res) => {
+app.delete('/workflows/:id', async (req, res) => {
   const id = req.params.id;
-  const index = workflows.findIndex((w) => w.id === id);
 
-  if (index === -1) {
-    return res.sendStatus(404);
+  try {
+    const result = await pool.query('delete from workflows where id = $1', [id]);
+    if (result.rowCount === 0) {
+      return res.sendStatus(404);
+    }
+    res.sendStatus(204);
+  } catch (err) {
+    console.error('Error deleting workflow', err);
+    res.sendStatus(500);
   }
-
-  workflows.splice(index, 1);
-
-  res.sendStatus(204);
 });
 
 // Connections
 
-app.get('/connections', (req, res) => {
-  res.json(connections);
+app.get('/connections', async (req, res) => {
+  try {
+    const result = await pool.query('select * from connections order by created_at asc');
+    res.json(result.rows.map(mapConnectionRow));
+  } catch (err) {
+    console.error('Error fetching connections', err);
+    res.sendStatus(500);
+  }
 });
 
-app.post('/connections', (req, res) => {
+app.post('/connections', async (req, res) => {
   const body = req.body || {};
 
   const now = new Date().toISOString();
@@ -183,52 +208,90 @@ app.post('/connections', (req, res) => {
   let candidateId = body.id || baseId;
   let suffix = 1;
 
-  while (connections.some((c) => c.id === candidateId)) {
-    candidateId = `${baseId}-${suffix++}`;
+  try {
+    while (true) {
+      const existing = await pool.query('select id from connections where id = $1', [
+        candidateId
+      ]);
+      if (existing.rowCount === 0) {
+        break;
+      }
+      candidateId = `${baseId}-${suffix++}`;
+    }
+
+    const result = await pool.query(
+      `
+      insert into connections (id, platform, label, handle, status, created_at, last_sync_at)
+      values ($1, $2, $3, $4, $5, $6, $7)
+      returning *
+    `,
+      [
+        candidateId,
+        body.platform || 'other',
+        label,
+        handle,
+        body.status || 'connected',
+        body.createdAt || now,
+        body.lastSyncAt || now
+      ]
+    );
+
+    res.status(201).json(mapConnectionRow(result.rows[0]));
+  } catch (err) {
+    console.error('Error creating connection', err);
+    res.sendStatus(500);
   }
-
-  const connection = {
-    id: candidateId,
-    platform: body.platform || 'other',
-    label,
-    handle,
-    status: body.status || 'connected',
-    createdAt: body.createdAt || now,
-    lastSyncAt: body.lastSyncAt || now
-  };
-
-  connections.push(connection);
-
-  res.status(201).json(connection);
 });
 
-app.patch('/connections/:id', (req, res) => {
+app.patch('/connections/:id', async (req, res) => {
   const id = req.params.id;
-  const index = connections.findIndex((c) => c.id === id);
-
-  if (index === -1) {
-    return res.sendStatus(404);
-  }
-
-  const existing = connections[index];
   const body = req.body || {};
 
-  const updated = {
-    ...existing,
-    status:
-      typeof body.status === 'string' ? body.status : existing.status,
-    label: typeof body.label === 'string' ? body.label : existing.label,
-    handle: typeof body.handle === 'string' ? body.handle : existing.handle,
-    lastSyncAt: new Date().toISOString()
-  };
+  try {
+    const existing = await pool.query('select * from connections where id = $1', [id]);
+    if (existing.rowCount === 0) {
+      return res.sendStatus(404);
+    }
 
-  connections[index] = updated;
+    const current = existing.rows[0];
 
-  res.json(updated);
+    const result = await pool.query(
+      `
+      update connections
+      set status = $1,
+          label = $2,
+          handle = $3,
+          last_sync_at = $4
+      where id = $5
+      returning *
+    `,
+      [
+        typeof body.status === 'string' ? body.status : current.status,
+        typeof body.label === 'string' ? body.label : current.label,
+        typeof body.handle === 'string' ? body.handle : current.handle,
+        new Date().toISOString(),
+        id
+      ]
+    );
+
+    res.json(mapConnectionRow(result.rows[0]));
+  } catch (err) {
+    console.error('Error updating connection', err);
+    res.sendStatus(500);
+  }
 });
 
 // Start server
 
-app.listen(port, () => {
-  console.log(`Social Orchestrator API listening on http://localhost:${port}`);
-});
+initSchema()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(
+        `Social Orchestrator API listening on http://localhost:${port}`
+      );
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database schema', err);
+    process.exit(1);
+  });
