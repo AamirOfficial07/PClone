@@ -1,11 +1,15 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 import { Connection, ConnectionPlatform, ConnectionStatus } from '../core/models/connection';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ConnectionsService {
+  private readonly apiBaseUrl = environment.apiBaseUrl;
+
   private readonly connectionsSubject = new BehaviorSubject<Connection[]>([
     {
       id: 'twitter-main',
@@ -29,12 +33,24 @@ export class ConnectionsService {
 
   readonly connections$: Observable<Connection[]> = this.connectionsSubject.asObservable();
 
+  constructor(private readonly http: HttpClient) {
+    if (!environment.useMockApi) {
+      this.loadFromApi();
+    }
+  }
+
   getAll(): Observable<Connection[]> {
     return this.connections$;
   }
 
   private getSnapshot(): Connection[] {
     return this.connectionsSubject.value;
+  }
+
+  private loadFromApi(): void {
+    this.http
+      .get<Connection[]>(`${this.apiBaseUrl}/connections`)
+      .subscribe((connections) => this.connectionsSubject.next(connections));
   }
 
   connect(input: {
@@ -70,6 +86,10 @@ export class ConnectionsService {
 
     this.connectionsSubject.next([...current, connection]);
 
+    if (!environment.useMockApi) {
+      this.http.post<Connection>(`${this.apiBaseUrl}/connections`, connection).subscribe();
+    }
+
     return connection;
   }
 
@@ -94,6 +114,12 @@ export class ConnectionsService {
 
     this.connectionsSubject.next(next);
 
+    if (!environment.useMockApi) {
+      this.http
+        .patch<Connection>(`${this.apiBaseUrl}/connections/${id}`, { status: 'disconnected' })
+        .subscribe();
+    }
+
     return true;
   }
 
@@ -117,6 +143,12 @@ export class ConnectionsService {
     next[index] = updated;
 
     this.connectionsSubject.next(next);
+
+    if (!environment.useMockApi) {
+      this.http
+        .patch<Connection>(`${this.apiBaseUrl}/connections/${id}`, { status })
+        .subscribe();
+    }
 
     return true;
   }
