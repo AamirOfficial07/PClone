@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Observable } from 'rxjs';
 import { ApiState, ApiStatusService } from './core/services/api-status.service';
 import { Toast } from './core/models/toast';
@@ -19,10 +19,15 @@ export class AppComponent {
 
   constructor(
     private readonly notificationService: NotificationService,
-    private readonly apiStatusService: ApiStatusService
+    private readonly apiStatusService: ApiStatusService,
+    public router: Router
   ) {
     this.toast$ = this.notificationService.toast$;
     this.apiState$ = this.apiStatusService.state$;
+  }
+
+  isAuthRoute(): boolean {
+    return this.router.url.includes('/auth');
   }
 
   onDismissToast(): void {

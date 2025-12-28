@@ -1,37 +1,19 @@
 import { Routes } from '@angular/router';
-import { HomeComponent } from './home/home.component';
-import { WorkflowsComponent } from './workflows/workflows.component';
-import { WorkflowDetailComponent } from './workflows/workflow-detail.component';
-import { WorkflowEditorComponent } from './workflows/workflow-editor.component';
-import { SettingsComponent } from './settings/settings.component';
+import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
+    path: 'auth',
+    loadChildren: () => import('./auth/auth.routes').then(m => m.AUTH_ROUTES)
+  },
+  {
+    path: 'workspaces',
+    canActivate: [authGuard],
+    loadChildren: () => import('./workspaces/workspace.routes').then(m => m.WORKSPACE_ROUTES)
+  },
+  {
     path: '',
-    component: HomeComponent
-  },
-  {
-    path: 'workflows',
-    component: WorkflowsComponent
-  },
-  {
-    path: 'workflows/new',
-    component: WorkflowEditorComponent
-  },
-  {
-    path: 'workflows/:id',
-    component: WorkflowDetailComponent
-  },
-  {
-    path: 'workflows/:id/edit',
-    component: WorkflowEditorComponent
-  },
-  {
-    path: 'settings',
-    component: SettingsComponent
-  },
-  {
-    path: '**',
-    redirectTo: ''
+    redirectTo: 'workspaces',
+    pathMatch: 'full'
   }
 ];
