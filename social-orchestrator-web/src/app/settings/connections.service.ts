@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Connection, ConnectionPlatform, ConnectionStatus } from '../core/models/connection';
+import { NotificationService } from '../core/services/notification.service';
 
 @Injectable({
   providedIn: 'root'
@@ -33,7 +34,10 @@ export class ConnectionsService {
 
   readonly connections$: Observable<Connection[]> = this.connectionsSubject.asObservable();
 
-  constructor(private readonly http: HttpClient) {
+  constructor(
+    private readonly http: HttpClient,
+    private readonly notificationService: NotificationService
+  ) {
     if (!environment.useMockApi) {
       this.loadFromApi();
     }
@@ -48,9 +52,12 @@ export class ConnectionsService {
   }
 
   private loadFromApi(): void {
-    this.http
-      .get<Connection[]>(`${this.apiBaseUrl}/connections`)
-      .subscribe((connections) => this.connectionsSubject.next(connections));
+    this.http.get<Connection[]>(`${this.apiBaseUrl}/connections`).subscribe({
+      next: (connections) => this.connectionsSubject.next(connections),
+      error: () => {
+        this.notificationService.showError('Could not load connections from the server.');
+      }
+    });
   }
 
   connect(input: {
@@ -87,7 +94,11 @@ export class ConnectionsService {
     this.connectionsSubject.next([...current, connection]);
 
     if (!environment.useMockApi) {
-      this.http.post<Connection>(`${this.apiBaseUrl}/connections`, connection).subscribe();
+      this.http.post<Connection>(`${this.apiBaseUrl}/connections`, connection).subscribe({
+        error: () => {
+          this.notificationService.showError('Could not save the connection to the server.');
+        }
+      });
     }
 
     return connection;
@@ -117,7 +128,13 @@ export class ConnectionsService {
     if (!environment.useMockApi) {
       this.http
         .patch<Connection>(`${this.apiBaseUrl}/connections/${id}`, { status: 'disconnected' })
-        .subscribe();
+        .subscribe({
+          error: () => {
+            this.notificationService.showError(
+              'Could not disconnect the connection on the server.'
+            );
+          }
+        });
     }
 
     return true;
@@ -147,7 +164,11 @@ export class ConnectionsService {
     if (!environment.useMockApi) {
       this.http
         .patch<Connection>(`${this.apiBaseUrl}/connections/${id}`, { status })
-        .subscribe();
+        .subscribe({
+          error: () => {
+            this.notificationService.showError('Could not update the connection on the server.');
+          }
+        });
     }
 
     return true;

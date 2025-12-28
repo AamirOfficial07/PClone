@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Workflow, WorkflowStatus } from '../core/models/workflow';
+import { NotificationService } from '../core/services/notification.service';
 
 @Injectable({
   providedIn: 'root'
@@ -38,7 +39,10 @@ export class WorkflowService {
 
   readonly workflows$: Observable<Workflow[]> = this.workflowsSubject.asObservable();
 
-  constructor(private readonly http: HttpClient) {
+  constructor(
+    private readonly http: HttpClient,
+    private readonly notificationService: NotificationService
+  ) {
     if (!environment.useMockApi) {
       this.loadFromApi();
     }
@@ -49,9 +53,12 @@ export class WorkflowService {
   }
 
   private loadFromApi(): void {
-    this.http
-      .get<Workflow[]>(`${this.apiBaseUrl}/workflows`)
-      .subscribe((workflows) => this.workflowsSubject.next(workflows));
+    this.http.get<Workflow[]>(`${this.apiBaseUrl}/workflows`).subscribe({
+      next: (workflows) => this.workflowsSubject.next(workflows),
+      error: () => {
+        this.notificationService.showError('Could not load workflows from the server.');
+      }
+    });
   }
 
   getAll(): Observable<Workflow[]> {
@@ -94,7 +101,11 @@ export class WorkflowService {
     this.workflowsSubject.next([...current, workflow]);
 
     if (!environment.useMockApi) {
-      this.http.post<Workflow>(`${this.apiBaseUrl}/workflows`, workflow).subscribe();
+      this.http.post<Workflow>(`${this.apiBaseUrl}/workflows`, workflow).subscribe({
+        error: () => {
+          this.notificationService.showError('Could not save the workflow to the server.');
+        }
+      });
     }
 
     return workflow;
@@ -126,9 +137,11 @@ export class WorkflowService {
     this.workflowsSubject.next(next);
 
     if (!environment.useMockApi) {
-      this.http
-        .put<Workflow>(`${this.apiBaseUrl}/workflows/${id}`, updated)
-        .subscribe();
+      this.http.put<Workflow>(`${this.apiBaseUrl}/workflows/${id}`, updated).subscribe({
+        error: () => {
+          this.notificationService.showError('Could not update the workflow on the server.');
+        }
+      });
     }
 
     return updated;
@@ -145,7 +158,11 @@ export class WorkflowService {
     this.workflowsSubject.next(next);
 
     if (!environment.useMockApi) {
-      this.http.delete<void>(`${this.apiBaseUrl}/workflows/${id}`).subscribe();
+      this.http.delete<void>(`${this.apiBaseUrl}/workflows/${id}`).subscribe({
+        error: () => {
+          this.notificationService.showError('Could not delete the workflow from the server.');
+        }
+      });
     }
 
     return true;
