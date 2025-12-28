@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Observable } from 'rxjs';
 import { Workflow } from '../core/models/workflow';
+import { NotificationService } from '../core/services/notification.service';
 import { WorkflowService } from './workflow.service';
 
 @Component({
@@ -16,56 +18,72 @@ import { WorkflowService } from './workflow.service';
       </p>
 
       <div class="workflows__actions">
-        <a routerLink="/workflows/new" class="workflows__create">
+        <a routerLink="/workflows/new" class="btn btn--primary">
           + New workflow
         </a>
       </div>
 
-      <div *ngIf="workflows.length === 0" class="workflows__empty">
-        <p>No workflows yet.</p>
-        <p class="workflows__hint">
-          You’ll be able to create multi-step automations that coordinate content,
-          channels, and timing.
-        </p>
-      </div>
-
-      <div *ngIf="workflows.length > 0" class="workflows__list">
-        <article
-          *ngFor="let workflow of workflows"
-          class="workflows__item"
-          [routerLink]="['/workflows', workflow.id]"
-        >
-          <header class="workflows__item-header">
-            <div>
-              <h2>{{ workflow.name }}</h2>
-              <p class="workflows__description">
-                {{ workflow.description }}
-              </p>
-            </div>
-
-            <div class="workflows__item-meta">
-              <span class="workflows__status" [class]="'workflows__status--' + workflow.status">
-                {{ workflow.status }}
-              </span>
-              <button
-                type="button"
-                class="workflows__edit"
-                [routerLink]="['/workflows', workflow.id, 'edit']"
-                (click)="$event.stopPropagation()"
-              >
-                Edit
-              </button>
-            </div>
-          </header>
-
-          <p class="workflows__meta">
-            Created {{ workflow.createdAt | date: 'mediumDate' }}
-            <span *ngIf="workflow.lastRunAt">
-              · Last run {{ workflow.lastRunAt | date: 'short' }}
-            </span>
+      <ng-container *ngIf="workflows$ | async as workflows">
+        <div *ngIf="workflows.length === 0" class="workflows__empty card">
+          <p>No workflows yet.</p>
+          <p class="workflows__hint">
+            You’ll be able to create multi-step automations that coordinate content,
+            channels, and timing.
           </p>
-        </article>
-      </div>
+        </div>
+
+        <div *ngIf="workflows.length > 0" class="workflows__list">
+          <article
+            *ngFor="let workflow of workflows"
+            class="workflows__item card"
+            [routerLink]="['/workflows', workflow.id]"
+          >
+            <header class="workflows__item-header">
+              <div>
+                <h2>{{ workflow.name }}</h2>
+                <p class="workflows__description">
+                  {{ workflow.description }}
+                </p>
+              </div>
+
+              <div class="workflows__item-meta">
+                <span
+                  class="workflows__status tag"
+                  [class.workflows__status--active]="workflow.status === 'active'"
+                  [class.workflows__status--paused]="workflow.status === 'paused'"
+                  [class.workflows__status--draft]="workflow.status === 'draft'"
+                >
+                  {{ workflow.status }}
+                </span>
+                <div class="workflows__item-actions">
+                  <button
+                    type="button"
+                    class="btn btn--secondary workflows__edit"
+                    [routerLink]="['/workflows', workflow.id, 'edit']"
+                    (click)="$event.stopPropagation()"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--secondary workflows__delete"
+                    (click)="onDelete(workflow.id, $event)"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            <p class="workflows__meta">
+              Created {{ workflow.createdAt | date: 'mediumDate' }}
+              <span *ngIf="workflow.lastRunAt">
+                · Last run {{ workflow.lastRunAt | date: 'short' }}
+              </span>
+            </p>
+          </article>
+        </div>
+      </ng-container>
     </section>
   `,
   styles: [
@@ -88,28 +106,8 @@ import { WorkflowService } from './workflow.service';
         margin: 0 0 1rem;
       }
 
-      .workflows__create {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.4rem 0.9rem;
-        border-radius: 999px;
-        background: #4f46e5;
-        color: #f9fafb;
-        font-size: 0.9rem;
-        border: none;
-        cursor: pointer;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2);
-      }
-
-      .workflows__create:hover {
-        background: #4338ca;
-      }
-
       .workflows__empty {
         padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #f9fafb;
-        border: 1px dashed #d1d5db;
       }
 
       .workflows__empty p {
@@ -130,10 +128,6 @@ import { WorkflowService } from './workflow.service';
 
       .workflows__item {
         padding: 0.9rem 1rem;
-        border-radius: 0.5rem;
-        background-color: #ffffff;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         cursor: pointer;
         transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
       }
@@ -167,26 +161,18 @@ import { WorkflowService } from './workflow.service';
         display: flex;
         flex-direction: column;
         align-items: flex-end;
-        gap: 0.3rem;
+        gap: 0.4rem;
+      }
+
+      .workflows__item-actions {
+        display: flex;
+        gap: 0.25rem;
       }
 
       .workflows__meta {
         margin: 0;
         font-size: 0.8rem;
         color: #6b7280;
-      }
-
-      .workflows__status {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 70px;
-        padding: 0.15rem 0.5rem;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border: 1px solid transparent;
       }
 
       .workflows__status--active {
@@ -207,27 +193,37 @@ import { WorkflowService } from './workflow.service';
         border-color: #e5e7eb;
       }
 
-      .workflows__edit {
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        border: 1px solid #d1d5db;
-        background-color: #ffffff;
+      .workflows__edit,
+      .workflows__delete {
         font-size: 0.75rem;
-        color: #374151;
-        cursor: pointer;
-      }
-
-      .workflows__edit:hover {
-        border-color: #4f46e5;
-        color: #111827;
+        padding: 0.25rem 0.6rem;
       }
     `
   ]
 })
 export class WorkflowsComponent {
-  get workflows(): Workflow[] {
-    return this.workflowService.getAll();
+  readonly workflows$: Observable<Workflow[]>;
+
+  constructor(
+    private readonly workflowService: WorkflowService,
+    private readonly notificationService: NotificationService
+  ) {
+    this.workflows$ = this.workflowService.getAll();
   }
 
-  constructor(private readonly workflowService: WorkflowService) {}
+  onDelete(id: string, event: Event): void {
+    event.stopPropagation();
+
+    const confirmed = window.confirm('Are you sure you want to delete this workflow?');
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deleted = this.workflowService.delete(id);
+
+    if (deleted) {
+      this.notificationService.showSuccess('Workflow deleted.');
+    }
+  }
 }

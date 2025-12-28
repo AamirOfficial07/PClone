@@ -1,11 +1,15 @@
 import { Injectable } from '@angular/core';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 import { Workflow, WorkflowStatus } from '../core/models/workflow';
 
 @Injectable({
   providedIn: 'root'
 })
 export class WorkflowService {
-  private workflows: Workflow[] = [
+  private readonly apiBaseUrl = environment.apiBaseUrl;
+
+  private readonly workflowsSubject = new BehaviorSubject<Workflow[]>([
     {
       id: 'welcome-sequence',
       name: 'New follower welcome sequence',
@@ -29,14 +33,20 @@ export class WorkflowService {
       status: 'draft',
       createdAt: '2025-01-05T12:00:00.000Z'
     }
-  ];
+  ]);
 
-  getAll(): Workflow[] {
-    return this.workflows;
+  readonly workflows$: Observable<Workflow[]> = this.workflowsSubject.asObservable();
+
+  private getSnapshot(): Workflow[] {
+    return this.workflowsSubject.value;
+  }
+
+  getAll(): Observable<Workflow[]> {
+    return this.workflows$;
   }
 
   getById(id: string): Workflow | undefined {
-    return this.workflows.find((workflow) => workflow.id === id);
+    return this.getSnapshot().find((workflow) => workflow.id === id);
   }
 
   create(input: { name: string; description: string; status: WorkflowStatus }): Workflow {
@@ -49,10 +59,12 @@ export class WorkflowService {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '') || 'workflow';
 
+    const current = this.getSnapshot();
+
     let candidateId = baseId;
     let suffix = 1;
 
-    while (this.workflows.some((workflow) => workflow.id === candidateId)) {
+    while (current.some((workflow) => workflow.id === candidateId)) {
       candidateId = `${baseId}-${suffix++}`;
     }
 
@@ -66,7 +78,7 @@ export class WorkflowService {
       createdAt: now
     };
 
-    this.workflows = [...this.workflows, workflow];
+    this.workflowsSubject.next([...current, workflow]);
 
     return workflow;
   }
@@ -75,27 +87,39 @@ export class WorkflowService {
     id: string,
     changes: { name: string; description: string; status: WorkflowStatus }
   ): Workflow | undefined {
-    const index = this.workflows.findIndex((workflow) => workflow.id === id);
+    const current = this.getSnapshot();
+    const index = current.findIndex((workflow) => workflow.id === id);
 
     if (index === -1) {
       return undefined;
     }
 
-    const current = this.workflows[index];
+    const existing = current[index];
 
     const updated: Workflow = {
-      ...current,
+      ...existing,
       name: changes.name.trim(),
       description: changes.description.trim(),
       status: changes.status
     };
 
-    this.workflows = [
-      ...this.workflows.slice(0, index),
-      updated,
-      ...this.workflows.slice(index + 1)
-    ];
+    const next = [...current];
+    next[index] = updated;
+
+    this.workflowsSubject.next(next);
 
     return updated;
+  }
+
+  delete(id: string): boolean {
+    const current = this.getSnapshot();
+    const next = current.filter((workflow) => workflow.id !== id);
+
+    if (next.length === current.length) {
+      return false;
+    }
+
+    this.workflowsSubject.next(next);
+    return true;
   }
 }

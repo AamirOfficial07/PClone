@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { NotificationService } from '../core/services/notification.service';
 import { Workflow } from '../core/models/workflow';
 import { WorkflowService } from './workflow.service';
 
@@ -21,12 +22,31 @@ import { WorkflowService } from './workflow.service';
             {{ workflow.description }}
           </p>
         </div>
-        <span
-          class="workflow-detail__status"
-          [class]="'workflow-detail__status--' + workflow.status"
-        >
-          {{ workflow.status }}
-        </span>
+        <div class="workflow-detail__actions">
+          <span
+            class="workflow-detail__status tag"
+            [class.workflow-detail__status--active]="workflow.status === 'active'"
+            [class.workflow-detail__status--paused]="workflow.status === 'paused'"
+            [class.workflow-detail__status--draft]="workflow.status === 'draft'"
+          >
+            {{ workflow.status }}
+          </span>
+          <div class="workflow-detail__buttons">
+            <a
+              class="btn btn--secondary"
+              [routerLink]="['/workflows', workflow.id, 'edit']"
+            >
+              Edit
+            </a>
+            <button
+              type="button"
+              class="btn btn--secondary"
+              (click)="onDelete()"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </header>
 
       <section class="workflow-detail__meta">
@@ -92,18 +112,21 @@ import { WorkflowService } from './workflow.service';
         color: #4b5563;
       }
 
-      .workflow-detail__status {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 80px;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border: 1px solid transparent;
-        white-space: nowrap;
+      .workflow-detail__actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.5rem;
+      }
+
+      .workflow-detail__buttons {
+        display: flex;
+        gap: 0.4rem;
+      }
+
+      .workflow-detail__buttons .btn {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.7rem;
       }
 
       .workflow-detail__status--active {
@@ -143,7 +166,8 @@ export class WorkflowDetailComponent {
   constructor(
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly workflowService: WorkflowService
+    private readonly workflowService: WorkflowService,
+    private readonly notificationService: NotificationService
   ) {
     const id = this.route.snapshot.paramMap.get('id');
 
@@ -160,5 +184,24 @@ export class WorkflowDetailComponent {
     }
 
     this.workflow = workflow;
+  }
+
+  onDelete(): void {
+    if (!this.workflow) {
+      return;
+    }
+
+    const confirmed = window.confirm('Are you sure you want to delete this workflow?');
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deleted = this.workflowService.delete(this.workflow.id);
+
+    if (deleted) {
+      this.notificationService.showSuccess('Workflow deleted.');
+      this.router.navigate(['/workflows']);
+    }
   }
 }

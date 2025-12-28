@@ -1,34 +1,72 @@
-<header class="app-header">
-  <div class="app-header__brand">
-    <span class="app-header__logo">SO</span>
-    <span class="app-header__title">Social Orchestrator</span>
+<div class="app-shell">
+  <div
+    *ngIf="toast$ | async as toast"
+    class="app-toast"
+    [class.app-toast--success]="toast.kind === 'success'"
+    [class.app-toast--error]="toast.kind === 'error'"
+    [class.app-toast--info]="toast.kind === 'info'"
+  >
+    <span class="app-toast__message">{{ toast.message }}</span>
+    <button
+      type="button"
+      class="app-toast__close"
+      (click)="onDismissToast()"
+    >
+      ✕
+    </button>
   </div>
 
-  <nav class="app-header__nav">
-    <a
-      routerLink="/"
-      routerLinkActive="active"
-      [routerLinkActiveOptions]="{ exact: true }"
-    >
-      Home
-    </a>
+  <header class="app-header">
+    <div class="app-header__brand">
+      <span class="app-header__logo">SO</span>
+      <span class="app-header__title">Social Orchestrator</span>
+    </div>
 
-    <a
-      routerLink="/workflows"
-      routerLinkActive="active"
-    >
-      Workflows
-    </a>
+    <nav class="app-header__nav">
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+      >
+        Home
+      </a>
 
-    <a
-      routerLink="/settings"
-      routerLinkActive="active"
-    >
-      Settings
-    </a>
-  </nav>
-</header>
+      <a
+        routerLink="/workflows"
+        routerLinkActive="active"
+      >
+        Workflows
+      </a>
 
-<main class="app-main">
-  <router-outlet></router-outlet>
-</main>
+      <a
+        routerLink="/settings"
+        routerLinkActive="active"
+      >
+        Settings
+      </a>
+    </nav>
+  </header>
+
+  <div class="app-shell__body">
+    <aside class="app-sidebar">
+      <nav class="app-sidebar__nav">
+        <a
+          routerLink="/workflows"
+          routerLinkActive="active"
+        >
+          Workflows
+        </a>
+        <a
+          routerLink="/settings"
+          routerLinkActive="active"
+        >
+          Settings
+        </a>
+      </nav>
+    </aside>
+
+    <main class="app-main">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>

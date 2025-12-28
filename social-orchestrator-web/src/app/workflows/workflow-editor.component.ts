@@ -3,6 +3,7 @@ import { Component } from '@angular/core';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { WorkflowStatus } from '../core/models/workflow';
+import { NotificationService } from '../core/services/notification.service';
 import { WorkflowService } from './workflow.service';
 
 @Component({
@@ -28,9 +29,15 @@ import { WorkflowService } from './workflow.service';
           />
           <span
             class="workflow-editor__error"
-            *ngIf="form.controls.name.touched && form.controls.name.invalid"
+            *ngIf="form.controls.name.touched && form.controls.name.errors?.['required']"
           >
             Name is required.
+          </span>
+          <span
+            class="workflow-editor__error"
+            *ngIf="form.controls.name.touched && form.controls.name.errors?.['maxlength']"
+          >
+            Name can’t be longer than 120 characters.
           </span>
         </label>
 
@@ -56,7 +63,7 @@ import { WorkflowService } from './workflow.service';
         <div class="workflow-editor__actions">
           <button
             type="submit"
-            class="workflow-editor__primary"
+            class="btn btn--primary"
             [disabled]="form.invalid"
           >
             {{ isEditMode ? 'Save changes' : 'Create workflow' }}
@@ -64,7 +71,7 @@ import { WorkflowService } from './workflow.service';
 
           <button
             type="button"
-            class="workflow-editor__secondary"
+            class="btn btn--secondary"
             (click)="onCancel()"
           >
             Cancel
@@ -156,39 +163,6 @@ import { WorkflowService } from './workflow.service';
         gap: 0.75rem;
         margin-top: 0.5rem;
       }
-
-      .workflow-editor__primary {
-        padding: 0.45rem 1rem;
-        border-radius: 999px;
-        border: none;
-        background: #4f46e5;
-        color: #f9fafb;
-        font-size: 0.9rem;
-        cursor: pointer;
-      }
-
-      .workflow-editor__primary:hover:not(:disabled) {
-        background: #4338ca;
-      }
-
-      .workflow-editor__primary:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-      }
-
-      .workflow-editor__secondary {
-        padding: 0.45rem 1rem;
-        border-radius: 999px;
-        border: 1px solid #d1d5db;
-        background: #ffffff;
-        font-size: 0.9rem;
-        color: #374151;
-        cursor: pointer;
-      }
-
-      .workflow-editor__secondary:hover {
-        border-color: #9ca3af;
-      }
     `
   ]
 })
@@ -207,7 +181,8 @@ export class WorkflowEditorComponent {
     private readonly fb: FormBuilder,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
-    private readonly workflowService: WorkflowService
+    private readonly workflowService: WorkflowService,
+    private readonly notificationService: NotificationService
   ) {
     const id = this.route.snapshot.paramMap.get('id');
 
@@ -261,6 +236,7 @@ export class WorkflowEditorComponent {
         status
       });
 
+      this.notificationService.showSuccess('Workflow updated.');
       this.router.navigate(['/workflows', this.currentId]);
       return;
     }
@@ -271,6 +247,7 @@ export class WorkflowEditorComponent {
       status
     });
 
+    this.notificationService.showSuccess('Workflow created.');
     this.router.navigate(['/workflows', created.id]);
   }
 
