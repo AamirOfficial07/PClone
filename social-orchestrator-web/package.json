@@ -6,6 +6,7 @@
     "ng": "ng",
     "start": "ng serve",
     "start:api": "node api/server.js",
+    "seed:api": "node api/seed.js",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
