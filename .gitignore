@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+bin/
+obj/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Angular
+.angular/
+
+# .NET
+*.dll
+*.pdb
+*.exe
