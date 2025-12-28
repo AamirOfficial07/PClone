@@ -15,6 +15,12 @@ import { WorkflowService } from './workflow.service';
         Define and manage your social orchestration workflows here.
       </p>
 
+      <div class="workflows__actions">
+        <a routerLink="/workflows/new" class="workflows__create">
+          + New workflow
+        </a>
+      </div>
+
       <div *ngIf="workflows.length === 0" class="workflows__empty">
         <p>No workflows yet.</p>
         <p class="workflows__hint">
@@ -30,14 +36,28 @@ import { WorkflowService } from './workflow.service';
           [routerLink]="['/workflows', workflow.id]"
         >
           <header class="workflows__item-header">
-            <h2>{{ workflow.name }}</h2>
-            <span class="workflows__status" [class]="'workflows__status--' + workflow.status">
-              {{ workflow.status }}
-            </span>
+            <div>
+              <h2>{{ workflow.name }}</h2>
+              <p class="workflows__description">
+                {{ workflow.description }}
+              </p>
+            </div>
+
+            <div class="workflows__item-meta">
+              <span class="workflows__status" [class]="'workflows__status--' + workflow.status">
+                {{ workflow.status }}
+              </span>
+              <button
+                type="button"
+                class="workflows__edit"
+                [routerLink]="['/workflows', workflow.id, 'edit']"
+                (click)="$event.stopPropagation()"
+              >
+                Edit
+              </button>
+            </div>
           </header>
-          <p class="workflows__description">
-            {{ workflow.description }}
-          </p>
+
           <p class="workflows__meta">
             Created {{ workflow.createdAt | date: 'mediumDate' }}
             <span *ngIf="workflow.lastRunAt">
@@ -62,6 +82,27 @@ import { WorkflowService } from './workflow.service';
       .workflows__subtitle {
         margin: 0 0 1rem;
         color: #4b5563;
+      }
+
+      .workflows__actions {
+        margin: 0 0 1rem;
+      }
+
+      .workflows__create {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.4rem 0.9rem;
+        border-radius: 999px;
+        background: #4f46e5;
+        color: #f9fafb;
+        font-size: 0.9rem;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.2);
+      }
+
+      .workflows__create:hover {
+        background: #4338ca;
       }
 
       .workflows__empty {
@@ -105,21 +146,28 @@ import { WorkflowService } from './workflow.service';
 
       .workflows__item-header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
         margin-bottom: 0.25rem;
       }
 
       .workflows__item-header h2 {
-        margin: 0;
+        margin: 0 0 0.25rem;
         font-size: 1.05rem;
       }
 
       .workflows__description {
-        margin: 0.25rem 0 0.3rem;
+        margin: 0;
         font-size: 0.95rem;
         color: #4b5563;
+      }
+
+      .workflows__item-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.3rem;
       }
 
       .workflows__meta {
@@ -158,13 +206,28 @@ import { WorkflowService } from './workflow.service';
         background-color: #f9fafb;
         border-color: #e5e7eb;
       }
+
+      .workflows__edit {
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid #d1d5db;
+        background-color: #ffffff;
+        font-size: 0.75rem;
+        color: #374151;
+        cursor: pointer;
+      }
+
+      .workflows__edit:hover {
+        border-color: #4f46e5;
+        color: #111827;
+      }
     `
   ]
 })
 export class WorkflowsComponent {
-  readonly workflows: Workflow[];
-
-  constructor(private readonly workflowService: WorkflowService) {
-    this.workflows = this.workflowService.getAll();
+  get workflows(): Workflow[] {
+    return this.workflowService.getAll();
   }
+
+  constructor(private readonly workflowService: WorkflowService) {}
 }
