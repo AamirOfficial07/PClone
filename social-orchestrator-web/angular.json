@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "social-orchestrator-web": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/social-orchestrator-web",
+            "index": "src/index.html",
+            "main": "src/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              "src/assets"
+            ],
+            "styles": [
+              "src/styles.css"
+            ],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "optimization": true
+            },
+            "development": {
+              "optimization": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "buildTarget": "social-orchestrator-web:build"
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "social-orchestrator-web:build:production"
+            },
+            "development": {
+              "buildTarget": "social-orchestrator-web:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  },
+  "defaultProject": "social-orchestrator-web",
+  "cli": {
+    "analytics": false
+  }
+}

@@ -1,0 +1,20 @@
+<header class="app-header">
+  <div class="app-header__brand">
+    <span class="app-header__logo">SO</span>
+    <span class="app-header__title">Social Orchestrator</span>
+  </div>
+
+  <nav class="app-header__nav">
+    <a
+      routerLink="/"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+    >
+      Home
+    </a>
+  </nav>
+</header>
+
+<main class="app-main">
+  <router-outlet></router-outlet>
+</main>
