@@ -1,0 +1,37 @@
+import { Routes } from '@angular/router';
+import { HomeComponent } from './home/home.component';
+import { WorkflowsComponent } from './workflows/workflows.component';
+import { WorkflowDetailComponent } from './workflows/workflow-detail.component';
+import { WorkflowEditorComponent } from './workflows/workflow-editor.component';
+import { SettingsComponent } from './settings/settings.component';
+
+export const routes: Routes = [
+  {
+    path: '',
+    component: HomeComponent
+  },
+  {
+    path: 'workflows',
+    component: WorkflowsComponent
+  },
+  {
+    path: 'workflows/new',
+    component: WorkflowEditorComponent
+  },
+  {
+    path: 'workflows/:id',
+    component: WorkflowDetailComponent
+  },
+  {
+    path: 'workflows/:id/edit',
+    component: WorkflowEditorComponent
+  },
+  {
+    path: 'settings',
+    component: SettingsComponent
+  },
+  {
+    path: '**',
+    redirectTo: ''
+  }
+];
