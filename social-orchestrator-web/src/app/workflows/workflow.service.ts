@@ -1,3 +1,4 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -37,8 +38,20 @@ export class WorkflowService {
 
   readonly workflows$: Observable<Workflow[]> = this.workflowsSubject.asObservable();
 
+  constructor(private readonly http: HttpClient) {
+    if (!environment.useMockApi) {
+      this.loadFromApi();
+    }
+  }
+
   private getSnapshot(): Workflow[] {
     return this.workflowsSubject.value;
+  }
+
+  private loadFromApi(): void {
+    this.http
+      .get<Workflow[]>(`${this.apiBaseUrl}/workflows`)
+      .subscribe((workflows) => this.workflowsSubject.next(workflows));
   }
 
   getAll(): Observable<Workflow[]> {
@@ -80,6 +93,10 @@ export class WorkflowService {
 
     this.workflowsSubject.next([...current, workflow]);
 
+    if (!environment.useMockApi) {
+      this.http.post<Workflow>(`${this.apiBaseUrl}/workflows`, workflow).subscribe();
+    }
+
     return workflow;
   }
 
@@ -108,6 +125,12 @@ export class WorkflowService {
 
     this.workflowsSubject.next(next);
 
+    if (!environment.useMockApi) {
+      this.http
+        .put<Workflow>(`${this.apiBaseUrl}/workflows/${id}`, updated)
+        .subscribe();
+    }
+
     return updated;
   }
 
@@ -120,6 +143,11 @@ export class WorkflowService {
     }
 
     this.workflowsSubject.next(next);
+
+    if (!environment.useMockApi) {
+      this.http.delete<void>(`${this.apiBaseUrl}/workflows/${id}`).subscribe();
+    }
+
     return true;
   }
 }
