@@ -153,7 +153,16 @@ namespace SocialOrchestrator.Infrastructure.SocialAccounts
             account.RequiresReauthorization = true;
             account.MarkUpdated();
 
-            // Optionally clear tokens; for now we keep them but mark account as requiring reauthorization.
+            // Remove any stored tokens for this social account so credentials are no longer held.
+            var tokens = await _dbContext.SocialAuthTokens
+                .Where(t => t.SocialAccountId == account.Id)
+                .ToListAsync();
+
+            if (tokens.Count > 0)
+            {
+                _dbContext.SocialAuthTokens.RemoveRange(tokens);
+            }
+
             await _dbContext.SaveChangesAsync();
 
             return Result.Success();
