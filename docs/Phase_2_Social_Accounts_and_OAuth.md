@@ -281,7 +281,9 @@ Create `SocialAccounts/SocialAccountService.cs`:
 
 - `DisconnectSocialAccountAsync`:
   - Set `IsActive = false`.
-  - Optionally clear tokens or leave them; at minimum, mark `RequiresReauthorization = true`.
+  - Mark `RequiresReauthorization = true`.
+  - **Remove any stored `SocialAuthToken` rows for that `SocialAccountId` so credentials are no longer held.**
+  - _Optional future enhancement_: when providers support it, also attempt **remote token revocation** (e.g., calling a provider-specific revoke endpoint) in addition to local deletion.
 
 Register service in DI:
 
