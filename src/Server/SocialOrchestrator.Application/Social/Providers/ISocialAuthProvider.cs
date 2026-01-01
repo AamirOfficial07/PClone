@@ -24,5 +24,12 @@ namespace SocialOrchestrator.Application.Social.Providers
         /// and fetching account details from the provider.
         /// </summary>
         Task<OAuthCallbackResult> HandleCallbackAsync(string code, string state);
+
+        /// <summary>
+        /// Optionally revokes tokens with the upstream provider, when supported.
+        /// Implementations should best-effort call the provider's revocation endpoint
+        /// but may return without error if revocation is not available.
+        /// </summary>
+        Task RevokeAsync(string accessToken, string? refreshToken);
     }
 }

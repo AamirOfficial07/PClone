@@ -416,7 +416,7 @@ Create `SocialAccountApiService` (Angular):
    - You can navigate from workspace list to social accounts page.
    - “Connect Facebook” button opens provider auth screen.
    - After successful connection, the account appears in the list.
-   - “Disconnect” correctly marks the account as inactive (and optional token cleanup).
+   - “Disconnect” correctly marks the account as inactive and removes stored tokens.
 
 4. **Security**:
    - Only authenticated users can list/connect/disconnect social accounts.
@@ -424,7 +424,29 @@ Create `SocialAccountApiService` (Angular):
 
 ---
 
-## 10. Instructions for Automated Coding Agents
+## 10. Security Considerations (Phase 2)
+
+- **Signed OAuth state**:
+  - OAuth `state` values should be generated server-side and cryptographically signed (e.g., using HMAC with the existing JWT signing key).
+  - The state payload should encode the workspace and user context, plus a timestamp.
+  - On callback, the server must:
+    - Verify the signature in constant time.
+    - Parse the workspace and user from the payload.
+    - Reject states older than a short window (e.g., 10 minutes) to limit replay risk.
+
+- **Token lifecycle**:
+  - Access/refresh tokens are stored in the `SocialAuthTokens` table and linked to `SocialAccount`.
+  - When a user disconnects a social account:
+    - The `SocialAccount` is marked `IsActive = false` and `RequiresReauthorization = true`.
+    - All associated `SocialAuthToken` records for that account are deleted so credentials are no longer held.
+  - Future enhancement:
+    - When supported by providers, also call a provider-specific revoke endpoint from the corresponding `ISocialAuthProvider.RevokeAsync` implementation to invalidate tokens upstream.
+
+- **Least privilege**:
+  - Request only the scopes required for Phase 2 (connect and basic account identification).
+  - Additional scopes for posting/analytics should be added in later phases as needed.
+
+## 11. Instructions for Automated Coding Agents
 
 - Use the exact file and class names specified in this document.
 - Do not add support for other providers beyond Facebook in this phase (design is generic, but implementation is only required for one provider).

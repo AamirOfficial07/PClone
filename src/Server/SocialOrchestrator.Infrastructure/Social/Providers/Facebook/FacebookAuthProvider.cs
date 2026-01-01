@@ -191,6 +191,13 @@ namespace SocialOrchestrator.Infrastructure.Social.Providers.Facebook
             };
         }
 
+        public Task RevokeAsync(string accessToken, string? refreshToken)
+        {
+            // Facebook token revocation is not implemented in Phase 2.
+            // Future enhancement: call a provider-specific revoke endpoint if available.
+            return Task.CompletedTask;
+        }
+
         private sealed class FacebookTokenResponse
         {
             public string? AccessToken { get; set; }
