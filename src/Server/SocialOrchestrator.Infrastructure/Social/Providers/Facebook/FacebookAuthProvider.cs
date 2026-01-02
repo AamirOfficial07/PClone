@@ -191,11 +191,34 @@ namespace SocialOrchestrator.Infrastructure.Social.Providers.Facebook
             };
         }
 
-        public Task RevokeAsync(string accessToken, string? refreshToken)
+        public async Task RevokeAsync(string accessToken, string? refreshToken)
         {
-            // Facebook token revocation is not implemented in Phase 2.
-            // Future enhancement: call a provider-specific revoke endpoint if available.
-            return Task.CompletedTask;
+            // Best-effort revocation using the Facebook Graph API.
+            // This uses the user access token to delete all permissions for the app,
+            // which invalidates existing user access tokens for this app-user pair.
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                return;
+            }
+
+            var client = _httpClientFactory.CreateClient();
+
+            var revokeUri = QueryHelpers.AddQueryString(
+                "https://graph.facebook.com/v19.0/me/permissions",
+                new Dictionary<string, string?>
+                {
+                    ["access_token"] = accessToken
+                });
+
+            try
+            {
+                using var response = await client.DeleteAsync(revokeUri);
+                // Ignore non-success responses; revocation is best-effort.
+            }
+            catch
+            {
+                // Swallow exceptions; local token deletion still ensures credentials are removed from our system.
+            }
         }
 
         private sealed class FacebookTokenResponse

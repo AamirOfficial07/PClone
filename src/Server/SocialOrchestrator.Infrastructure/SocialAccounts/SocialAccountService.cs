@@ -14,10 +14,12 @@ namespace SocialOrchestrator.Infrastructure.SocialAccounts
     public class SocialAccountService : ISocialAccountService
     {
         private readonly AppDbContext _dbContext;
+        private readonly IEnumerable<ISocialAuthProvider> _authProviders;
 
-        public SocialAccountService(AppDbContext dbContext)
+        public SocialAccountService(AppDbContext dbContext, IEnumerable<ISocialAuthProvider> authProviders)
         {
             _dbContext = dbContext;
+            _authProviders = authProviders;
         }
 
         public async Task<Result<IReadOnlyList<SocialAccountSummaryDto>>> GetWorkspaceSocialAccountsAsync(Guid workspaceId)
@@ -160,6 +162,27 @@ namespace SocialOrchestrator.Infrastructure.SocialAccounts
 
             if (tokens.Count > 0)
             {
+                // Best-effort remote revocation when a provider implementation is available.
+                var provider = _authProviders.FirstOrDefault(p => p.NetworkType == account.NetworkType);
+                if (provider != null)
+                {
+                    foreach (var token in tokens)
+                    {
+                        if (!string.IsNullOrWhiteSpace(token.AccessTokenEncrypted) ||
+                            !string.IsNullOrWhiteSpace(token.RefreshTokenEncrypted))
+                        {
+                            try
+                            {
+                                await provider.RevokeAsync(token.AccessTokenEncrypted, token.RefreshTokenEncrypted);
+                            }
+                            catch
+                            {
+                                // Ignore revocation failures; local credential removal will still proceed.
+                            }
+                        }
+                    }
+                }
+
                 _dbContext.SocialAuthTokens.RemoveRange(tokens);
             }
 

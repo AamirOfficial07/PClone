@@ -147,6 +147,9 @@ Methods:
     - Fetches account details (id, name, username).
     - Returns an `OAuthCallbackResult`.
 
+- `Task RevokeAsync(string accessToken, string? refreshToken)`
+  - Best-effort revocation hook. When supported by the provider, implementations should call a provider-specific revoke endpoint to invalidate tokens upstream; otherwise, they may no-op.
+
 ### 4.2 DTO: OAuthCallbackResult
 
 File: `Social/Providers/OAuthCallbackResult.cs`
@@ -283,7 +286,7 @@ Create `SocialAccounts/SocialAccountService.cs`:
   - Set `IsActive = false`.
   - Mark `RequiresReauthorization = true`.
   - **Remove any stored `SocialAuthToken` rows for that `SocialAccountId` so credentials are no longer held.**
-  - _Optional future enhancement_: when providers support it, also attempt **remote token revocation** (e.g., calling a provider-specific revoke endpoint) in addition to local deletion.
+  - When a matching `ISocialAuthProvider` is available, make a **best-effort call to `RevokeAsync`** before local deletion so that tokens can also be invalidated upstream where the provider supports revocation.
 
 Register service in DI:
 
@@ -439,8 +442,7 @@ Create `SocialAccountApiService` (Angular):
   - When a user disconnects a social account:
     - The `SocialAccount` is marked `IsActive = false` and `RequiresReauthorization = true`.
     - All associated `SocialAuthToken` records for that account are deleted so credentials are no longer held.
-  - Future enhancement:
-    - When supported by providers, also call a provider-specific revoke endpoint from the corresponding `ISocialAuthProvider.RevokeAsync` implementation to invalidate tokens upstream.
+    - If an `ISocialAuthProvider` implementation is registered for the account’s network, the service makes a best-effort call to `RevokeAsync` so that tokens can also be invalidated upstream where the provider supports revocation (implemented for Facebook in Phase 2).
 
 - **Least privilege**:
   - Request only the scopes required for Phase 2 (connect and basic account identification).
