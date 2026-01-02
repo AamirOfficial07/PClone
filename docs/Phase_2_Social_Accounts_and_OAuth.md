@@ -147,6 +147,9 @@ Methods:
     - Fetches account details (id, name, username).
     - Returns an `OAuthCallbackResult`.
 
+- `Task RevokeAsync(string accessToken, string? refreshToken)`
+  - Best-effort revocation hook. When supported by the provider, implementations should call a provider-specific revoke endpoint to invalidate tokens upstream; otherwise, they may no-op.
+
 ### 4.2 DTO: OAuthCallbackResult
 
 File: `Social/Providers/OAuthCallbackResult.cs`
@@ -281,7 +284,9 @@ Create `SocialAccounts/SocialAccountService.cs`:
 
 - `DisconnectSocialAccountAsync`:
   - Set `IsActive = false`.
-  - Optionally clear tokens or leave them; at minimum, mark `RequiresReauthorization = true`.
+  - Mark `RequiresReauthorization = true`.
+  - **Remove any stored `SocialAuthToken` rows for that `SocialAccountId` so credentials are no longer held.**
+  - When a matching `ISocialAuthProvider` is available, make a **best-effort call to `RevokeAsync`** before local deletion so that tokens can also be invalidated upstream where the provider supports revocation.
 
 Register service in DI:
 
@@ -414,7 +419,7 @@ Create `SocialAccountApiService` (Angular):
    - You can navigate from workspace list to social accounts page.
    - “Connect Facebook” button opens provider auth screen.
    - After successful connection, the account appears in the list.
-   - “Disconnect” correctly marks the account as inactive (and optional token cleanup).
+   - “Disconnect” correctly marks the account as inactive and removes stored tokens.
 
 4. **Security**:
    - Only authenticated users can list/connect/disconnect social accounts.
@@ -422,7 +427,28 @@ Create `SocialAccountApiService` (Angular):
 
 ---
 
-## 10. Instructions for Automated Coding Agents
+## 10. Security Considerations (Phase 2)
+
+- **Signed OAuth state**:
+  - OAuth `state` values should be generated server-side and cryptographically signed (e.g., using HMAC with the existing JWT signing key).
+  - The state payload should encode the workspace and user context, plus a timestamp.
+  - On callback, the server must:
+    - Verify the signature in constant time.
+    - Parse the workspace and user from the payload.
+    - Reject states older than a short window (e.g., 10 minutes) to limit replay risk.
+
+- **Token lifecycle**:
+  - Access/refresh tokens are stored in the `SocialAuthTokens` table and linked to `SocialAccount`.
+  - When a user disconnects a social account:
+    - The `SocialAccount` is marked `IsActive = false` and `RequiresReauthorization = true`.
+    - All associated `SocialAuthToken` records for that account are deleted so credentials are no longer held.
+    - If an `ISocialAuthProvider` implementation is registered for the account’s network, the service makes a best-effort call to `RevokeAsync` so that tokens can also be invalidated upstream where the provider supports revocation (implemented for Facebook in Phase 2).
+
+- **Least privilege**:
+  - Request only the scopes required for Phase 2 (connect and basic account identification).
+  - Additional scopes for posting/analytics should be added in later phases as needed.
+
+## 11. Instructions for Automated Coding Agents
 
 - Use the exact file and class names specified in this document.
 - Do not add support for other providers beyond Facebook in this phase (design is generic, but implementation is only required for one provider).
