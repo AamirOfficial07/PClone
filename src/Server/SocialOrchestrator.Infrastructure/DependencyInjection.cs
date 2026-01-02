@@ -3,11 +3,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SocialOrchestrator.Application.Identity.Services;
+using SocialOrchestrator.Application.Posts.Services;
 using SocialOrchestrator.Application.Social.Providers;
 using SocialOrchestrator.Application.SocialAccounts.Services;
 using SocialOrchestrator.Application.Workspaces.Services;
 using SocialOrchestrator.Infrastructure.Identity;
 using SocialOrchestrator.Infrastructure.Persistence;
+using SocialOrchestrator.Infrastructure.Posts;
 using SocialOrchestrator.Infrastructure.Social.Providers.Facebook;
 using SocialOrchestrator.Infrastructure.SocialAccounts;
 using SocialOrchestrator.Infrastructure.Workspaces;
@@ -40,9 +42,12 @@ namespace SocialOrchestrator.Infrastructure
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IWorkspaceService, WorkspaceService>();
             services.AddScoped<ISocialAccountService, SocialAccountService>();
+            services.AddScoped<IPostService, PostService>();
+            services.AddScoped<IPostPublishingService, PostPublishingService>();
 
-            // Social auth providers (Facebook as first implementation)
+            // Social providers
             services.AddScoped<ISocialAuthProvider, FacebookAuthProvider>();
+            services.AddScoped<ISocialPublisher, FacebookPublisher>();
 
             return services;
         }

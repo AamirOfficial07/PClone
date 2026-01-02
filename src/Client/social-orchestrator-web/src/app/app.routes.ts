@@ -12,6 +12,11 @@ export const routes: Routes = [
     loadChildren: () => import('./social-accounts/social-accounts.routes').then(m => m.SOCIAL_ACCOUNTS_ROUTES)
   },
   {
+    path: 'workspaces/:workspaceId/posts',
+    canActivate: [authGuard],
+    loadChildren: () => import('./posts/posts.routes').then(m => m.POSTS_ROUTES)
+  },
+  {
     path: 'workspaces',
     canActivate: [authGuard],
     loadChildren: () => import('./workspaces/workspace.routes').then(m => m.WORKSPACE_ROUTES)
