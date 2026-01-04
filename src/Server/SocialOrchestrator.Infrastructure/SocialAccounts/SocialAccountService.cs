@@ -123,7 +123,7 @@ namespace SocialOrchestrator.Infrastructure.SocialAccounts
                 token.RefreshTokenEncrypted = oauthResult.RefreshToken;
                 token.ExpiresAtUtc = oauthResult.ExpiresAtUtc;
                 token.Scopes = scopesString;
-                token.UpdatedAt = DateTime.UtcNow;
+                token.MarkUpdated();
             }
 
             await _dbContext.SaveChangesAsync();

@@ -106,7 +106,7 @@ namespace SocialOrchestrator.Infrastructure.Persistence
 
                 entity.HasIndex(e => new { e.WorkspaceId, e.NetworkType });
 
-                entity.HasOne<Workspace>()
+                entity.HasOne(e => e.Workspace)
                     .WithMany()
                     .HasForeignKey(e => e.WorkspaceId)
                     .OnDelete(DeleteBehavior.Cascade);
@@ -170,7 +170,7 @@ namespace SocialOrchestrator.Infrastructure.Persistence
                 entity.HasOne(e => e.SocialAccount)
                     .WithMany()
                     .HasForeignKey(e => e.SocialAccountId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.NoAction);
             });
         }
     }
