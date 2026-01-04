@@ -1,4 +1,6 @@
 using System.Text;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using SocialOrchestrator.Infrastructure;
@@ -12,6 +14,20 @@ builder.Services.AddSwaggerGen();
 
 // Infrastructure (DbContext, Identity, Services, etc.)
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Hangfire for background job processing
+builder.Services.AddHangfire(config =>
+{
+    config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+          .UseSimpleAssemblyNameTypeSerializer()
+          .UseRecommendedSerializerSettings()
+          .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new SqlServerStorageOptions
+          {
+              PrepareSchemaIfNecessary = true
+          });
+});
+
+builder.Services.AddHangfireServer();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -63,6 +79,9 @@ app.UseCors("Frontend");
 // Authentication must come before Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Hangfire dashboard (can be restricted with authorization filters in later phases)
+app.UseHangfireDashboard("/hangfire");
 
 app.MapControllers();
 

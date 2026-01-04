@@ -53,7 +53,12 @@ import { Observable } from 'rxjs';
             </div>
             
             <div class="workspace-actions mt-4">
-              <button class="btn btn--secondary btn--block">Open Workspace</button>
+              <a
+                class="btn btn--secondary btn--block"
+                [routerLink]="['/workspaces', workspace.id, 'social-accounts']"
+              >
+                Open Workspace
+              </a>
             </div>
           </div>
         </div>

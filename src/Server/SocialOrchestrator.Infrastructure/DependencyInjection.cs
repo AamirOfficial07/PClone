@@ -3,9 +3,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SocialOrchestrator.Application.Identity.Services;
+using SocialOrchestrator.Application.Posts.Services;
+using SocialOrchestrator.Application.Social.Providers;
+using SocialOrchestrator.Application.SocialAccounts.Services;
 using SocialOrchestrator.Application.Workspaces.Services;
 using SocialOrchestrator.Infrastructure.Identity;
 using SocialOrchestrator.Infrastructure.Persistence;
+using SocialOrchestrator.Infrastructure.Posts;
+using SocialOrchestrator.Infrastructure.Social.Providers.Facebook;
+using SocialOrchestrator.Infrastructure.SocialAccounts;
 using SocialOrchestrator.Infrastructure.Workspaces;
 
 namespace SocialOrchestrator.Infrastructure
@@ -16,12 +22,11 @@ namespace SocialOrchestrator.Infrastructure
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            // Phase 1: register AppDbContext with SQL Server provider.
-            // Connection string name: "DefaultConnection".
+            // Database
             services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
-            // Phase 1: register ASP.NET Identity
+            // ASP.NET Identity
             services
                 .AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
                 {
@@ -36,9 +41,22 @@ namespace SocialOrchestrator.Infrastructure
                 .AddEntityFrameworkStores<AppDbContext>()
                 .AddDefaultTokenProviders();
 
-            // Phase 1: register application services
+            // HttpClient for external providers
+            services.AddHttpClient();
+
+            // Options for Facebook OAuth
+            services.Configure<FacebookOptions>(configuration.GetSection("Facebook"));
+
+            // Application services
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IWorkspaceService, WorkspaceService>();
+            services.AddScoped<ISocialAccountService, SocialAccountService>();
+            services.AddScoped<IPostService, PostService>();
+            services.AddScoped<IPostPublishingService, PostPublishingService>();
+
+            // Social providers
+            services.AddScoped<ISocialAuthProvider, FacebookAuthProvider>();
+            services.AddScoped<ISocialPublisher, FacebookPublisher>();
 
             return services;
         }
